@@ -15,7 +15,7 @@ from chatbot import CharacterChatbot
 
 # Initialize models
 avatar_gen = AvatarGenerator()
-bot = CharacterChatbot(model_name = "llama3.2:1b")
+bot = CharacterChatbot(model_name = "llama3:8b")
 
 with gr.Blocks(title = "Local Character.AI") as demo:
     gr.Markdown("# Local Character Creation & Chat")
