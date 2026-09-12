@@ -19,8 +19,7 @@ class CharacterChatbot:
 
         Input(s):
             message: the latest user message to respond to.
-            chat_history: A list of tuples (user_msg, bot_msg) representing the prior turns in the convo, with oldest first.
-                --> Each pair is converted into a "user" and then "assistant" message so the model has conversational context.
+            chat_history: A list of dicts to represent prior turns in the convo, eahc with "role (user/assistant) and "content" keys (with oldest first).
             char_name: The name of the character bein roleplayed; injected here to maintain the persona
             char_personality: a short dec of the character's traits + personality; again injected here to maitain persona and to steer the tone + behavior
         
@@ -37,12 +36,27 @@ class CharacterChatbot:
 
         # Assemble the prompt payload (system prompt -> full history -> new user message)
         messages = [{"role": "system", "content": system_prompt}]
-        for user_msg, bot_msg in chat_history:
-            messages.append({"role": "user", "content": user_msg})
-            messages.append({"role": "assistant", "content": bot_msg})
+
+        # Normalize each history entry's content since Gradio can return it as EITHER a plain string or a list of content-part dicts
+        for entry in chat_history:
+            messages.append({
+                "role": entry["role"],
+                "content": _flatten_content(entry["content"]),
+            })
 
         messages.append({"role": "user", "content": message})
 
         # Query the local Ollama API and return just the reply text
         response = ollama.chat(model = self.model_name, messages = messages)
         return response['message']['content']
+
+def _flatten_content(content):
+    """
+    flatten_content: a helper method that normalizes a Gradio chat message's content field into a plain string
+    """
+
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(part.get("text", "") for part in content if isinstance(part, dict) and part.get("type") == "text")
+    return str(content)
