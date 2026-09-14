@@ -44,3 +44,12 @@ class AvatarGenerator:
         # CAN CHANGE THESE PARAMS: Using 25 steps for now (testing + efficiency); return the first image in the pipeline's output batch
         image = self.pipe(prompt, num_inference_steps = 25).images[0]
         return image
+
+    def release_gpu_memory(self):
+        """
+        release_gpu_memory: moves the pipeline off the GPU and clears the CUDA cache once avatar gen is no longer needed for this session (chatting started)
+        """
+
+        if self.device == "cuda":
+            self.pipe.to("cpu")
+            torch.cuda.empty_cache()
