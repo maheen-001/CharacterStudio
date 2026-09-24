@@ -17,6 +17,8 @@ class CharacterChatbot:
         """
         respond: generate the character's next reply to a user message.
 
+        ** This is a GENERATOR function. The caller MUST iterate it, since a single return value can no longer represent a reply that's still being generated.
+
         Input(s):
             message: the latest user message to respond to.
             chat_history: A list of dicts to represent prior turns in the convo, eahc with "role (user/assistant) and "content" keys (with oldest first).
@@ -24,8 +26,8 @@ class CharacterChatbot:
             char_personality: a short dec of the character's traits + personality; again injected here to maitain persona and to steer the tone + behavior
             user_alias: the user's chosen alias from user_alias_state
         
-        Output(s): returns the character's reply as a string, extracted from the Ollama chat response.
-            --> Hard-coded cap of 4 sentences and order to stay in character at all costs. Can change to make it more details but I need it to be fast rn.
+        Yields: the character's reply text so far as a string, growing with each new chunk recieved frm Ollama. The final yielded value is the compelte reply.
+            --> Hard-coded cap of 3 sentences and order to stay in character at all costs. Can change to make it more details but I need it to be fast rn.
         """
 
         # Build a system message injecting the persona's rules
@@ -49,9 +51,14 @@ class CharacterChatbot:
 
         messages.append({"role": "user", "content": message})
 
-        # Query the local Ollama API and return just the reply text
-        response = ollama.chat(model = self.model_name, messages = messages)
-        return response['message']['content']
+        # Query the local Ollama API in STREAMING mode: returns an iterator of small response chunks instead of one full response
+        #    -> accumulate and yield the growing reply as each chunk arrives
+        partial_reply = ""
+        stream = ollama.chat(model=self.model_name, messages = messages, stream = True)
+        for chunk in stream:
+            token = chunk.get("message", {}).get("content", "")
+            partial_reply += token
+            yield partial_reply
 
 def _flatten_content(content):
     """
