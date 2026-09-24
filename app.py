@@ -1,11 +1,21 @@
 # This file was made by Maheen Abbasi on Sep. 11, 2026 as part of a personal project
 
 """
-app.py: A self contained Gradio web app that lets a user define a custom character (name, personality, and visual appearance),
-generate an avatar image for that character through StableDiffusion, and then chat with the character via a locally-hosted LLM (Ollama).
+app.py: A self-contained Gradio web app that walks a user through a 4-step flow:
+    1. enter a display alias
+    2. build a character via a styled form
+    3. optionally generate an avatar 
+    4. chat with the character via a locally-hosted LLM (Ollama), with the avatar generated through Stable Diffusion.
 
-Run directly (`python app.py`) to launch the Gradio interface in a browser.
---> Should run locally as long as necessary GPU/CPU resources exist and Ollama is installed with the target model already pulled.
+    - A siidebar lists up to MAX_CHARACTERS previously created characters with a button to start building a new one.
+    - The bot sends the first message (as an in-character greeting) rather than waiting on the user, and replies stream in by tokens
+    with a bouncing dots indicater while Ollama is still warming up and/or generating.
+    - Screens are implemented as toggled gr.Column's within a single Blocks layout, so only one is visible at a time, driven by button click callbacks.
+    - The sidebar is implemented as MAX_CHARACTERS pre-built rows, toggled visible/hidden as characters are added.
+
+    Run directly (python app.py on Windows) to launch the Gradio interface in a browser.
+        -> Shoudl run locally as long as necessary GPU/CPU resources exist and Ollama is installed with the target model (llama3:8b) already pulled.
+
 """
 
 # Imports
@@ -21,6 +31,12 @@ bot = CharacterChatbot(model_name = "llama3:8b")
 # Arbitrary, but I am gonna make max number of saved characters that the sidebar holds = 10
 #    -> Get rid of the oldest one with FIFO
 MAX_CHARACTERS = 10
+
+TYPING_INDICATOR_HTML = (
+    '<span class="typing-indicator">'
+    '<span class="dot"></span><span class="dot"></span><span class="dot"></span>'
+    "</span>"
+)
 
 def make_placeholder_avatar(name: str) -> Image.Image:
     """
@@ -79,14 +95,11 @@ CUSTOM_CSS = """
     color: var(--text) !important;
 }
 
-/* Shared screen wrapper: centers content, caps line length */
 .screen {
     max-width: 640px;
     margin: 0 auto;
     padding: 3rem 1.5rem;
 }
-
-/* Small sequence caption ("Step 1 of 4") */
 .step-caption {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.8rem;
@@ -94,14 +107,7 @@ CUSTOM_CSS = """
     color: var(--text-muted) !important;
     margin-bottom: 0.5rem;
 }
-
-/* Welcome screen: the alias input reads like an inline answer, not a
-   boxed form field */
-.welcome-heading h2 {
-    font-size: 2rem;
-    line-height: 1.25;
-    margin-bottom: 1.5rem;
-}
+.welcome-heading h2 { font-size: 2rem; line-height: 1.25; margin-bottom: 1.5rem; }
 .alias-input textarea, .alias-input input {
     background: transparent !important;
     border: none !important;
@@ -113,11 +119,8 @@ CUSTOM_CSS = """
     padding: 0.5rem 0 !important;
     box-shadow: none !important;
 }
-.alias-input textarea:focus, .alias-input input:focus {
-    border-bottom-color: var(--accent) !important;
-}
+.alias-input textarea:focus, .alias-input input:focus { border-bottom-color: var(--accent) !important; }
 
-/* Character form card */
 .form-card {
     background: var(--panel);
     border: 1px solid var(--panel-border);
@@ -125,18 +128,9 @@ CUSTOM_CSS = """
     padding: 1.75rem;
     position: relative;
 }
-.form-card label {
-    font-family: 'IBM Plex Sans', sans-serif !important;
-    font-size: 0.85rem !important;
-    color: var(--text-muted) !important;
-}
-.form-card textarea, .form-card input {
-    background: var(--bg) !important;
-    border: 1px solid var(--panel-border) !important;
-    color: var(--text) !important;
-}
+.form-card label { font-family: 'IBM Plex Sans', sans-serif !important; font-size: 0.85rem !important; color: var(--text-muted) !important; }
+.form-card textarea, .form-card input { background: var(--bg) !important; border: 1px solid var(--panel-border) !important; color: var(--text) !important; }
 
-/* Avatar popup: a narrower card to read as a distinct interruption */
 .popup-card {
     background: var(--panel);
     border: 1px solid var(--panel-border);
@@ -147,7 +141,10 @@ CUSTOM_CSS = """
     text-align: center;
 }
 
-/* Buttons: one accent color, used only for the primary action */
+.popup-loading {
+    margin: 1.5rem 0 !important;
+}
+
 .btn-primary, .btn-primary button {
     background: var(--accent) !important;
     color: #FFFFFF !important;
@@ -160,33 +157,106 @@ CUSTOM_CSS = """
     color: var(--text-muted) !important;
     border: 1px solid var(--panel-border) !important;
 }
+.field-error { color: var(--error) !important; font-size: 0.9rem; }
 
-.field-error {
-    color: var(--error) !important;
-    font-size: 0.9rem;
-}
-
-.avatar-display img {
-    border-radius: 12px;
-    border: 1px solid var(--panel-border);
-}
-
-/* Sidebar */
+/* Sidebar: fills the full side, not a boxed-in gallery */
 .sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100vh;
+    padding: 0;
     background: var(--panel);
     border-right: 1px solid var(--panel-border);
-    padding: 1.5rem 1rem;
 }
-.sidebar-new-btn, .sidebar-new-btn button {
-    width: 100%;
-    margin-bottom: 1rem;
+.sidebar-new-btn, .sidebar-new-btn button { margin: 1rem 1rem 0.5rem 1rem; width: calc(100% - 2rem); }
+.sidebar-row {
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
 }
-.sidebar-gallery img {
-    border-radius: 8px;
+
+.sidebar-avatar {
+    width: 40px !important;
+    height: 40px !important;
+}
+.sidebar-avatar > div {
+    width: 40px !important;
+    height: 40px !important;
+}
+.sidebar-avatar img {
+    width: 40px !important;
+    height: 40px !important;
+    object-fit: cover !important;
+    object-position: center !important;
+    border-radius: 50%;
+}
+
+.chat-header-avatar {
+    width: 44px !important;
+    height: 44px !important;
+}
+.chat-header-avatar > div {
+    width: 44px !important;
+    height: 44px !important;
+}
+.chat-header-avatar img {
+    width: 44px !important;
+    height: 44px !important;
+    object-fit: cover !important;
+    object-position: center !important;
+    border-radius: 50%;
+}
+
+.sidebar-avatar .icon-buttons,
+.sidebar-avatar button[aria-label="Fullscreen"],
+.sidebar-avatar button[aria-label="Download"],
+.chat-header-avatar .icon-buttons,
+.chat-header-avatar button[aria-label="Fullscreen"],
+.chat-header-avatar button[aria-label="Download"] {
+    display: none !important;
+}
+
+.sidebar-name-btn, .sidebar-name-btn button {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--text) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+}
+
+/* Chat screen: WhatsApp-style header (small circular avatar + name) with
+   the chat itself taking up the bulk of the screen */
+.chat-header {
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--panel-border);
+}
+
+.chat-header-name { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 1.15rem; }
+
+/* Bouncing typing-dots indicator, shown as a chat bubble's content while
+   waiting on Ollama */
+.typing-indicator { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+.typing-indicator .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-muted);
+    animation: bounce 1.2s infinite ease-in-out;
+}
+.typing-indicator .dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-indicator .dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+    40% { transform: translateY(-5px); opacity: 1; }
 }
 """
 
-with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
+with gr.Blocks(title = "Character Studio") as demo:
 
     # Hold the alias the user picked in screen 1. Threaded through to the chat screen for a personalized greeting and system prompt context.
     user_alias_state = gr.State("")
@@ -213,19 +283,26 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
     # MAIN APP: sidebar + the character creation / avatar / chat screens. Hidden until the alias is submitted.
     with gr.Row(visible = False) as app_row:
 
-        # Sidebar
-        with gr.Column(scale = 1, min_width = 220, elem_classes = "sidebar"):
-            new_char_btn = gr.Button(
-                "+ New Character", elem_classes="btn-primary sidebar-new-btn"
-            )
-            sidebar_gallery = gr.Gallery(
-                label = "Your Characters",
-                columns = 1,
-                height = 420,
-                show_label = True,
-                allow_preview = False,
-                elem_classes = "sidebar-gallery",
-            )
+        # Sidebar: + New Character button, then MAX_CHARACTERS pre-built rows (avatar | name), each hidden until a character occupies that slot.
+        with gr.Column(scale = 1, min_width = 240, elem_classes = "sidebar"):
+            new_char_btn = gr.Button("+ New Character", elem_classes = "btn-primary sidebar-new-btn")
+
+            sidebar_rows = []
+            for _slot in range(MAX_CHARACTERS):
+                with gr.Row(visible = False, elem_classes = "sidebar-row") as _row:
+                    with gr.Column(scale = 0, min_width = 40):
+                        _avatar = gr.Image(
+                            show_label = False, container = False, interactive = False,
+                            elem_classes = "sidebar-avatar",
+                        )
+                    with gr.Column(scale = 1):
+                        _name_btn = gr.Button("", elem_classes = "sidebar-name-btn")
+                sidebar_rows.append({"row": _row, "avatar": _avatar, "name_btn": _name_btn})
+
+            # Flattened list of every sidebar component in a fixed order, used whenever a callback needs to refresh the whole sidebar at once.
+            sidebar_output_components = []
+            for _slot in sidebar_rows:
+                sidebar_output_components += [_slot["row"], _slot["avatar"], _slot["name_btn"]]
 
         # Main content
         with gr.Column(scale = 3):   
@@ -258,24 +335,78 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
                         "This renders a portrait locally and can take a minute or two"
                         " depending on your hardware."
                     )
+                    # Tell user the avatar is being generated
+                    popup_loading = gr.Markdown("Generating your character...", visible = False, elem_classes = "step-caption popup-loading")
                     with gr.Row():
                         generate_avatar_btn = gr.Button("Generate avatar", elem_classes = "btn-primary")
                         skip_avatar_btn = gr.Button("Skip for now", elem_classes = "btn-secondary")
 
             # SCREEN 4: chat
-            with gr.Column(visible = False, elem_classes = "screen") as screen_chat:
-                gr.Markdown("Step 4 of 4", elem_classes = "step-caption")
-                greeting = gr.Markdown()
-                with gr.Row():
-                    with gr.Column(scale = 1):
-                        avatar_display = gr.Image(label = "Avatar", elem_classes = "avatar-display")
-                    with gr.Column(scale = 2):
-                        chatbot_ui = gr.Chatbot(label = "Chat Window")
-                        msg_input = gr.Textbox(
-                            placeholder = "Say something...", show_label = False
+            with gr.Column(visible = False, elem_classes = "screen chat-screen") as screen_chat:
+                with gr.Row(elem_classes = "chat-header"):
+                    with gr.Column(scale = 0, min_width = 44):
+                        avatar_display = gr.Image(
+                            show_label = False, container = False, interactive = False,
+                            elem_classes = "chat-header-avatar",
                         )
-                        clear_btn = gr.ClearButton([msg_input, chatbot_ui])
+                    with gr.Column(scale = 1):
+                        chat_header_name = gr.Markdown(elem_classes = "chat-header-name")
 
+                # sanitize_html = False lets the typing-dots HTML render instead of showing as literal escaped tag text.
+                chatbot_ui = gr.Chatbot(show_label = False, elem_classes = "chat-window", sanitize_html = False)
+                msg_input = gr.Textbox(placeholder = "Message...", show_label = False)
+                clear_btn = gr.ClearButton([msg_input, chatbot_ui])
+
+    # HELPERS
+
+    def build_sidebar_updates(characters):
+        """
+        build_sidebar_updates: builds the list of Gradio updates for every sidebar slot (up to MAX_CHARACTERS), so the sidebar mirrors
+        characters_state. 
+            -> Slots beyond len(characters) are hidden.
+
+        Input(s): characters list
+
+        Output(s): a flat list ordered as [row0, avatar0, name_btn0, row1, ...] matching sidebar_output_components, so it can be spread directly into
+        a callback's return tuple.
+        """
+
+        updates = []
+        for i in range(MAX_CHARACTERS):
+            if i < len(characters):
+                c = characters[i]
+                updates += [gr.update(visible = True), gr.update(value = c["avatar"]), gr.update(value = c["name"])]
+            else:
+                updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "")]
+        return updates
+
+    def no_op_sidebar_updates():
+        """
+        no_op_sidebar_updates: used during token-by-token streaming so we aren't recomputing all 10 sidebar rows on every single chunk.
+            -> leaves everything as is, basically
+        """
+        return [gr.update() for _ in range(MAX_CHARACTERS * 3)]
+
+    def load_character_by_index(idx, characters):
+        """
+        load_character_by_index: shared logic for loading a saved character into the chat screen, used by each sidebar row's click handler.
+
+        Input(s):
+            idx: position of click
+            characters: list of characters
+
+        Output(s): a tuple of (current_index, avatar_display value, chatbot_ui history, chat_header_name text, char_name, char_personality,
+        char_appearance, screen_form visibility, screen_popup visibility, screen_chat visibility).
+        """
+        c = characters[idx]
+
+        return (
+            idx,
+            c["avatar"], c["history"], f"**{c['name']}**",
+            c["name"], c["personality"], c["appearance"],
+            gr.update(visible = False), gr.update(visible = False), gr.update(visible = True),
+        )
+    
     # CALLBACKS
 
     def submit_alias(alias):
@@ -344,11 +475,60 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
         outputs = [screen_form, screen_popup, form_error],
     )
 
+    def _finish_character_creation(new_char, alias, characters):
+        """
+        _finish_character_creation: shared logic for both do_generate_avatar and skip_avatar. 
+        Saves the new character (popping the oldest if at MAX_CHARACTERS), reveals the chat screen, and streams 
+        an in-character greeting as the first chat message.
+
+        This is a GENERATOR: yields multiple times so the UI shows a typing indicator immediately, then fills in the greeting as it
+        streams in from Ollama.
+        """
+
+        characters = list(characters)
+        if len(characters) >= MAX_CHARACTERS:
+            # evict oldest if needed
+            characters.pop(0)
+        # Add new character
+        characters.append(new_char)
+        new_index = len(characters) - 1
+
+        # FIRST YIELD: reveal the chat screen immediately with a typing indicator in place of the greeting, and a full sidebar refresh
+        #    -> the new character's row needs to appear
+        display_history = [{"role": "assistant", "content": TYPING_INDICATOR_HTML}]
+        yield (
+            new_char["avatar"], f"**{new_char['name']}**",
+            gr.update(visible = False), gr.update(visible = True),
+            characters, new_index, display_history,
+            *build_sidebar_updates(characters), gr.update(interactive = False),
+        )
+
+        # Stream the greeting in, overwriting the typing indicator with growing text as tokens arrive
+        #     -> Sidebar/avatar/header stay unchanged during this loop (no_op_sidebar_updates)
+        for partial_greeting in bot.greet(new_char["name"], new_char["personality"], user_alias = alias):
+            display_history[-1]["content"] = partial_greeting
+            yield (
+                gr.update(), gr.update(),
+                gr.update(), gr.update(),
+                characters, new_index, display_history,
+                *no_op_sidebar_updates(), gr.update(),
+            )
+
+        # Push the completed greeting into character's saved history and re-enable input
+        new_char = dict(new_char)
+        new_char["history"] = display_history
+        characters[new_index] = new_char
+        yield (
+            gr.update(), gr.update(),
+            gr.update(), gr.update(),
+            characters, new_index, display_history,
+            *no_op_sidebar_updates(), gr.update(interactive = True),
+        )
+
     def do_generate_avatar(appearance, alias, name, personality, characters):
         """
-        do_generate_avatar: Gradio callback for the generate avatar button on the popup screen. Runs Stable Diffusion inference,
-        saves the new character (removing the oldest one if max characters), refreshes the sidebar, and then advances to the chat
-        screen with an empty hisotyr.
+        do_generate_avatar: Gradio callback for the generate avatar button on the popup screen. Disables bth popup buttons,
+        shows a loading message, then runs Stable Diffusion inference before handing off to _finish_character_creation for saving + the streamed greeting.
 
         Input(s):
             appearance: value of char_appearance, used as the image gen prompt
@@ -359,25 +539,30 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
         Output(s): a tuple of the generated PIL.Image.Image for avatar_display, screen popup's visibility (hidden), screen_chat's visibility (shown), and the greeting Markdown text.
         """
 
+        # FIRST YIELD: locks the popup before starting the SD call (everyting unrelated to the lock is just gr.update() since ntohing else should change yet)
+        yield (
+            gr.update(), gr.update(), gr.update(), gr.update(),
+            characters, gr.update(), gr.update(),
+            *no_op_sidebar_updates(), gr.update(),
+
+            # Lock generate and skip avatar buttons
+            gr.update(interactive = False), gr.update(interactive = False),
+
+            # Show loading popup
+            gr.update(visible = True),
+        )
         img = avatar_gen.generate_avatar(appearance)
         avatar_gen.release_gpu_memory()
 
-        # Add the new character, removing the oldest if needed, and populate the sidebar
-        characters = list(characters)
-        if len(characters) >= MAX_CHARACTERS:
-            # Pop oldest to make room
-            characters.pop(0)
-        characters.append({"name": name, "personality": personality, "appearance": appearance, "avatar": img, "history": []})
-        new_index = len(characters) - 1
-        gallery_items = [(c["avatar"], c["name"]) for c in characters]
-        greeting_text = f"**{alias}**, meet **{name}**. Say hello below!"
-        
-        return img, gr.update(visible = False), gr.update(visible = True), greeting_text, characters, new_index, gallery_items, []
+        new_char = {"name": name, "personality": personality, "appearance": appearance, "avatar": img, "history": []}
+
+        for step in _finish_character_creation(new_char, alias, characters):
+            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False))
 
     generate_avatar_btn.click(
         fn = do_generate_avatar,
         inputs = [char_appearance, user_alias_state, char_name, char_personality, characters_state],
-        outputs = [avatar_display, screen_popup, screen_chat, greeting, characters_state, current_index, sidebar_gallery, chatbot_ui],
+        outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading],
     )
 
     def skip_avatar(alias, name, personality, appearance, characters):
@@ -393,26 +578,29 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
             Output(s): a tuple of screen_popup's visibility (hidden), screen_chat's visibility(shown), and the greeting Markdown text
         """
 
-        avatar_gen.release_gpu_memory()
-        placeholder = make_placeholder_avatar(name)
-
-        # Again, add the new character and remove oldest if needed. Use a placeholder image for the avatar instead
-        characters = list(characters)
-        if len(characters) >= MAX_CHARACTERS:
-            characters.pop(0)
-        characters.append(
-            {"name": name, "personality": personality, "appearance": appearance, "avatar": placeholder, "history": []}
+        yield (
+            gr.update(), gr.update(), gr.update(), gr.update(),
+            characters, gr.update(), gr.update(),
+            *no_op_sidebar_updates(), gr.update(),
+        
+            # Lock generate and skip avatar buttons
+            gr.update(interactive = False), gr.update(interactive = False),
+        
+            # Show loading popup
+            gr.update(visible = True),
         )
-        new_index = len(characters) - 1
-        gallery_items = [(c["avatar"], c["name"]) for c in characters]
-        greeting_text = f"**{alias}**, meet **{name}**. Say hello below!"
+        
+        placeholder = make_placeholder_avatar(name)
+        new_char = {"name": name, "personality": personality, "appearance": appearance, "avatar": placeholder, "history": []}
 
-        return placeholder, gr.update(visible = False), gr.update(visible = True), greeting_text, characters, new_index, gallery_items, []
+        for step in _finish_character_creation(new_char, alias, characters):
+            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False))
+
 
     skip_avatar_btn.click(
         fn = skip_avatar,
         inputs = [user_alias_state, char_name, char_personality, char_appearance, characters_state],
-        outputs = [avatar_display, screen_popup, screen_chat, greeting, characters_state, current_index, sidebar_gallery, chatbot_ui],
+        outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading],
     )
 
     def start_new_character():
@@ -429,44 +617,29 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
 
             # Hide chat screen, popups, and error forms; show the character creation form
             gr.update(visible = False), gr.update(visible = False), gr.update(visible = True), gr.update(visible = False),
+
+            # Reser avatar popup buttons and hides loading popup
+            gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False)
         )
 
     new_char_btn.click (
         fn = start_new_character,
         inputs = [],
-        outputs = [char_name, char_personality, char_appearance, current_index,screen_chat, screen_popup, screen_form, form_error],
+        outputs = [char_name, char_personality, char_appearance, current_index, screen_chat, screen_popup, screen_form, form_error, generate_avatar_btn, skip_avatar_btn, popup_loading],
     )
 
-    def load_character(evt: gr.SelectData, characters):
-        """
-        load_character: Gradio callback fired when a character is clicked in the sidebar gallery. Loads that character's avatar, 
-        saved chat history, name, and personality, then jumps to the chat screen.
-
-        Input(s):
-            evt: Gradio's selection event data; evt.index is the clicked character's position in characters.
-            characters: the current characters_state list.
-        """
-
-        # Use position of the clicked gallery item (character) to look up the full character dict at that pos
-        idx = evt.index
-        c = characters[idx]
-
-        greeting_text = f"**{c['name']}** is ready to talk. Say hello below!"
-
-        # Return params needed in outputs[]
-        return (
-            idx,
-            c["avatar"], c["history"],
-            greeting_text,
-            c["name"], c["personality"], c["appearance"],
-            gr.update(visible = False), gr.update(visible = False), gr.update(visible = True),
+    # Wire each of the MAX_CHARACTERS sidebar rows to load that character on click.
+    for i, slot in enumerate(sidebar_rows):
+        slot["name_btn"].click(
+            # slot_index = i binds each button to its own fixed index at definition time
+            fn = lambda characters, slot_index = i: load_character_by_index(slot_index, characters),
+            inputs = [characters_state],
+            outputs = [
+                current_index, avatar_display, chatbot_ui, chat_header_name,
+                char_name, char_personality, char_appearance,
+                screen_form, screen_popup, screen_chat,
+            ],
         )
-
-    sidebar_gallery.select(
-        fn = load_character,
-        inputs = [characters_state],
-        outputs = [current_index, avatar_display, chatbot_ui, greeting, char_name, char_personality, char_appearance, screen_form, screen_popup, screen_chat],
-    )
 
     def user_chat(user_msg, alias, characters, idx):
         """
@@ -475,6 +648,7 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
             1. Sends the message along with running history, current character settings, and the user's alias to the chatbot
             2. Appends the exchange to the visible chat history
             3. Clears the input box
+        msg_input (ability to send messages) is blocked suring generation to prevent sedning a seconf message mid-reply.
         
             Input(s):
                 user_msg: The text that the user just typed and submitted
@@ -501,8 +675,9 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
             {"role": "user", "content": user_msg},
             {"role": "assistant", "content": ""},
         ]
-        # FIRST YIELD: pushes the user's message (and the empty assistant bubble) to the UI
-        yield "", display_history, characters
+
+        # FIRST YIELD: pushes the user's message (and the empty assistant bubble) to the UI; disables input
+        yield gr.update(value = "", interactive = False), display_history, characters
 
         # bot.respond is the generator from chatbot.py; each yield from it hands back the reply accumulated so far
         for partial_reply in bot.respond(
@@ -511,7 +686,7 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
             # Overwrite the last item in display_history (the empty or partial assistant bubble) with the latest text
             display_history[-1]["content"] = partial_reply
             # SECOND YIELD: re-render the chat window, acrtually update with new text
-            yield "", display_history, characters
+            yield gr.update(), display_history, characters
 
         # Ollama message completed, update character's record to preserve history
         updated_char = dict(char)
@@ -519,7 +694,8 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
         characters[idx] = updated_char
 
         # THIRD YIELD: pushes the saved state to the UI one more time, guarsanteeing that the UI reflects the fully saved characters_state, not jsut the local display_history
-        yield "", display_history, characters
+        #    -> Also re-enable input
+        yield gr.update(interactive = True), display_history, characters
 
     msg_input.submit (
         fn = user_chat, 
@@ -528,4 +704,4 @@ with gr.Blocks(title = "Local Character.AI", css = CUSTOM_CSS) as demo:
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(css = CUSTOM_CSS)

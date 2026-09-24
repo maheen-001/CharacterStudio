@@ -10,7 +10,7 @@ class CharacterChatbot:
     """
 
     # Set default to the lightweight model (may change later, I want faster response times)
-    def __init__(self, model_name = "llama3.2:1b"):
+    def __init__(self, model_name = "llama3:8b"):
         self.model_name = model_name
 
     def respond(self, message: str, chat_history: list, char_name: str, char_personality: str, user_alias: str = None):
@@ -55,6 +55,44 @@ class CharacterChatbot:
         #    -> accumulate and yield the growing reply as each chunk arrives
         partial_reply = ""
         stream = ollama.chat(model=self.model_name, messages = messages, stream = True)
+        for chunk in stream:
+            token = chunk.get("message", {}).get("content", "")
+            partial_reply += token
+            yield partial_reply
+
+    def greet(self, char_name: str, char_personality: str, user_alias: str = None):
+        """
+        greet(): generates an in-character opening message from the bot, starting a conversation before the user has saif anything.
+        This uses the same streaming-generator design as respond(), but with no chat_history and no user message. Model is prompted
+        only by the system instruction to make an opening line.
+            -> helps Ollama warm up and bypasses awkward waiting time for the first message.
+
+        Input(s):
+            char_name, char_personality: same as respond()
+            user_alias: also same as repsond()
+
+        Yields: the greeting text so far, growing with each chunk received from Ollama.
+        """
+
+        # Same setup and prompting as in respond()
+        system_prompt = (
+            f"You are roleplaying strictly as {char_name}. "
+            f"Your traits and personality: {char_personality}. "
+            f"Stay in character at all costs. Keep answers under 3 sentences."
+        )
+        if user_alias:
+            system_prompt += f" You are speaking with someone who goes by {user_alias}."
+        system_prompt += (
+            " This is the very start of the conversation. Greet the user in"
+            " character with a short opening line -- don't wait for them to"
+            " speak first."
+        )
+
+        messages = [{"role": "system", "content": system_prompt}]
+
+        # Same yield
+        partial_reply = ""
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True)
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token

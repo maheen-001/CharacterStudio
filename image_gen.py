@@ -39,10 +39,17 @@ class AvatarGenerator:
             prompt template to biad the output towards a more detailed portrait style avatar (highly detailed chara avatar 8k)
         """
 
-        prompt = f"portrait photo of {visual_desc}, highly detailed, character avatar, 8k"
+        prompt = f"drawn portrait of {visual_desc}, attractive adult character, striking features, expressive eyes, stylish appearance, dark romance aesthetic, moody cinematic lighting, elegant fashion, mysterious expression, Pinterest-inspired digital illustration, semi-realistic anime style, clean lineart, detailed shading"
+
+        negative_prompt = """
+        photorealistic, photograph, live action, 3d render, hyperrealistic,
+        blurry, low quality, poorly drawn face, deformed face, asymmetrical eyes,
+        bad anatomy, extra fingers, malformed hands, distorted features,
+        oversaturated, childish style
+        """
 
         # CAN CHANGE THESE PARAMS: Using 25 steps for now (testing + efficiency); return the first image in the pipeline's output batch
-        image = self.pipe(prompt, num_inference_steps = 25).images[0]
+        image = self.pipe(prompt, negative_prompt = negative_prompt, num_inference_steps = 25).images[0]
         return image
 
     def release_gpu_memory(self):
