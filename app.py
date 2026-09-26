@@ -95,13 +95,35 @@ def format_character_details(c: dict) -> str:
     Output(s): a Markdown-formatted string.
     """
     lorebook = c.get("lorebook", "").strip()
-    lore_section = f"\n\n**World notes:**\n{lorebook}" if lorebook else ""
+    lore_section = f"\n\n### World notes:\n{lorebook}" if lorebook else ""
     return (
         f"## {c['name']}\n\n"
-        f"**Personality:**\n{c['personality']}\n\n"
-        f"**Appearance:**\n{c['appearance']}"
+        f"### Personality:\n{c['personality']}\n\n"
+        f"### Appearance:\n{c['appearance']}"
         f"{lore_section}"
     )
+
+def format_user_profile(profile: dict) -> str:
+    """
+    format_user_profile: builds the read-only Markdown text shown when the user views their own profile
+    details (alias/gender/age/context) from the chat screen.
+
+    Input(s):
+        profile: the user's profile dict from user_profile_state. Any key besides alias can be empty.
+
+    Output(s): a Markdown-formatted string.
+    """
+    lines = [f"## {profile.get('alias', 'You')}"]
+    if profile.get("gender"):
+        lines.append(f"### Gender:\n{profile['gender']}")
+    if profile.get("age"):
+        lines.append(f"###vAge:\n{profile['age']}")
+    if profile.get("context"):
+        lines.append(f"###vContext:\n{profile['context']}")
+    if len(lines) == 1:
+        # Nothing but the alias was ever filled in
+        lines.append("_No other details were added._")
+    return "\n\n".join(lines)
 
 """
 STYLING
@@ -109,6 +131,19 @@ STYLING
 
 CUSTOM_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap');
+
+.gradio-container, .gradio-container > div, .contain, .app, #root, .main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+}
+
+.app-row, .app-row > *, .main-content, .main-content > * {
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
 
 html, body {
     height: 100%;
@@ -146,12 +181,18 @@ html, body {
     margin: 0 auto;
     padding: 3rem 1.5rem;
 }
+.main-content > .screen:not(.chat-screen) {
+    margin: 0 auto !important;
+    padding: 3rem 1.5rem !important;
+}
 .step-caption {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.8rem;
     letter-spacing: 0.03em;
     color: var(--text-muted) !important;
     margin-bottom: 0.5rem;
+    text-align: center !important;
+    width: 100%;
 }
 .welcome-heading h2 { font-size: 2rem; line-height: 1.25; margin-bottom: 1.5rem; }
 .alias-input textarea, .alias-input input {
@@ -256,44 +297,46 @@ html, body {
 }
 
 .sidebar-avatar {
+    position: relative !important;
     width: 40px !important;
     height: 40px !important;
     flex-shrink: 0 !important;
-}
-.sidebar-avatar > div {
-    width: 40px !important;
-    height: 40px !important;
-    padding: 0 !important;
+    overflow: hidden !important;
+    border-radius: 50%;
 }
 .sidebar-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 40px !important;
     height: 40px !important;
+    max-width: none !important;
+    max-height: none !important;
     object-fit: cover !important;
     object-position: center !important;
-    border-radius: 50%;
-    display: block;
 }
 .sidebar-avatar .icon-buttons,
 .sidebar-avatar button[aria-label="Fullscreen"],
 .sidebar-avatar button[aria-label="Download"] { display: none !important; }
 
 .chat-header-avatar {
+    position: relative !important;
     width: 44px !important;
     height: 44px !important;
     flex-shrink: 0 !important;
-}
-.chat-header-avatar > div {
-    width: 44px !important;
-    height: 44px !important;
-    padding: 0 !important;
+    overflow: hidden !important;
+    border-radius: 50%;
 }
 .chat-header-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
     width: 44px !important;
     height: 44px !important;
+    max-width: none !important;
+    max-height: none !important;
     object-fit: cover !important;
     object-position: center !important;
-    border-radius: 50%;
-    display: block;
 }
 .chat-header-avatar .icon-buttons,
 .chat-header-avatar button[aria-label="Fullscreen"],
@@ -357,29 +400,177 @@ html, body {
     40% { transform: translateY(-5px); opacity: 1; }
 }
 
-/* Leave-confirmation and character-details popups: rendered as a
-   full-screen dimmed overlay (position: fixed) ON TOP of whatever screen
-   is currently showing, rather than replacing it -- this way "Stay"/
-   "Close" just has to hide the overlay, with no need to remember or
-   restore whatever screen was behind it. */
 .modal-overlay {
     position: fixed !important;
     inset: 0 !important;
     background: rgba(43, 20, 32, 0.45);
+    backdrop-filter: blur(2px);
     display: flex !important;
     align-items: center;
     justify-content: center;
     z-index: 1000;
+    animation: overlay-fade-in 0.15s ease-out;
+}
+@keyframes overlay-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 .modal-card {
+    position: relative;
     background: var(--bg);
     border: 1px solid var(--panel-border);
-    border-radius: 12px;
-    padding: 2rem;
+    border-radius: 16px;
+    padding: 2.25rem 2rem 2rem 2rem;
     max-width: 480px;
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(226, 63, 132, 0.18), 0 6px 20px rgba(43, 20, 32, 0.10);
+    animation: modal-pop-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes modal-pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Avatar shown at the top of the character-details popup */
+.modal-avatar {
+    position: relative !important;
+    width: 140px !important;
+    height: 140px !important;
+    margin: 0 auto 1.25rem auto !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    border: 3px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--panel-border);
+    background: var(--panel);
+}
+.modal-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 140px !important;
+    height: 140px !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center 20% !important;
+}
+.modal-avatar .icon-buttons,
+.modal-avatar button[aria-label="Fullscreen"],
+.modal-avatar button[aria-label="Download"] { display: none !important; }
+
+/* Text content inside the popups */
+.modal-body { text-align: left; }
+.modal-body h2 {
+    text-align: center;
+    font-size: 1.4rem;
+    margin: 0 0 1.25rem 0;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--panel-border);
+}
+.modal-body h3 {
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent) !important;
+    margin: 1.1rem 0 0.35rem 0 !important;
+}
+.modal-body h3:first-of-type { margin-top: 0 !important; }
+.modal-body p {
+    margin: 0 0 0.75rem 0;
+    line-height: 1.5;
+    color: var(--text);
+}
+.modal-body em {
+    color: var(--text-muted);
+}
+.modal-body { 
+    text-align: left; 
+    padding: 0 0.15rem; /* small extra horizontal cushion beyond the card's own padding */
+}
+
+/* Close button: small pill, right-aligned instead of full-width default */
+.modal-close-btn, .modal-close-btn button {
+    display: block;
+    margin: 1.5rem 0.25rem 0.25rem auto !important;
+    width: auto !important;
+    padding: 0.45rem 1.25rem !important;
+    border-radius: 999px !important;
+    font-size: 0.85rem !important;
+}
+
+.app-row {
+    gap: 0 !important;
+    padding: 0 !important;
+}
+.app-row > * {
+    margin: 0 !important;
+}
+
+/* Sidebar header label, above the character list */
+.sidebar-header {
+    padding: 0.5rem 1rem 0.75rem 1rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--panel-border);
+    margin-bottom: 0.5rem;
+}
+
+/* Chat bubbles: differentiate user vs character, iMessage/WhatsApp style. */
+.chat-window [data-testid*="user"],
+.chat-window .message.user,
+.chat-window .user-row .message {
+    background: var(--accent) !important;
+    color: #FFFFFF !important;
+    border-radius: 18px 18px 4px 18px !important;
+}
+.chat-window [data-testid*="bot"],
+.chat-window .message.bot,
+.chat-window .bot-row .message {
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border-radius: 18px 18px 18px 4px !important;
+}
+
+/* Pill-shaped message input bar with a round send button */
+.msg-row {
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--panel-border);
+}
+.msg-input textarea, .msg-input input {
+    border-radius: 999px !important;
+    border: 1px solid var(--panel-border) !important;
+    padding: 0.6rem 1rem !important;
+}
+.send-btn, .send-btn button {
+    border-radius: 50% !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    background: var(--accent) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+
+.back-btn, .back-btn button {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--text-muted) !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 0.85rem !important;
+    padding: 0 !important;
+    margin-bottom: 1rem;
+    text-align: left !important;
+    justify-content: flex-start !important;
 }
 """
 
@@ -399,9 +590,13 @@ with gr.Blocks(title = "Character Studio") as demo:
     sd_generating_state = gr.State(False)
     pending_action_state = gr.State(None)
 
+    # Which character was active before the + New Character was clicked for the back button to work
+    previous_index_state = gr.State(None)
+
     # SCREEN 1: profile entry
     with gr.Column(visible = True, elem_classes = "screen") as screen_welcome:
         gr.Markdown("Step 1 of 4", elem_classes = "step-caption")
+        cancel_from_welcome_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
         gr.Markdown(
             "## What should we call you here?\nPick any name, it's just for this chat!",
             elem_classes = "welcome-heading",
@@ -424,8 +619,9 @@ with gr.Blocks(title = "Character Studio") as demo:
     with gr.Row(visible = False, elem_classes = "app-row") as app_row:
 
         # Sidebar: + New Character button, then MAX_CHARACTERS pre-built rows (avatar | name), each hidden until a character occupies that slot.
-        with gr.Column(scale = 1, min_width = 240, elem_classes = "sidebar"):
+        with gr.Column(scale = 1, min_width = 240, elem_classes = "sidebar") as sidebar_col:
             new_char_btn = gr.Button("+ New Character", elem_classes = "btn-primary sidebar-new-btn")
+            gr.Markdown("Chats", elem_classes = "sidebar-header")
 
             sidebar_rows = []
             for _slot in range(MAX_CHARACTERS):
@@ -450,6 +646,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             # SCREEN 2: character creation form
             with gr.Column(visible = True, elem_classes = "screen") as screen_form:
                 gr.Markdown("Step 2 of 4", elem_classes = "step-caption")
+                cancel_from_form_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
                 gr.Markdown("## Build your character")
                 with gr.Group(elem_classes = "form-card"):
                     char_name = gr.Textbox(label = "Name", value = "Baymax")
@@ -475,6 +672,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             # SCREEN 3: avatar decision "popup" for generating the image
             with gr.Column(visible = False, elem_classes = "screen") as screen_popup:
                 gr.Markdown("Step 3 of 4", elem_classes = "step-caption")
+                cancel_from_popup_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
                 with gr.Group(elem_classes = "popup-card"):
                     gr.Markdown("### Generate an avatar?")
                     gr.Markdown(
@@ -499,17 +697,31 @@ with gr.Blocks(title = "Character Studio") as demo:
                         chat_header_name = gr.Markdown(elem_classes = "chat-header-name")
                     with gr.Column(scale=0, min_width=32):
                         details_btn = gr.Button("i", elem_classes="btn-secondary details-btn")
+                    with gr.Column(scale = 0, min_width = 32):
+                        my_profile_btn = gr.Button("⚙️", elem_classes="btn-secondary details-btn")
 
                 # sanitize_html = False lets the typing-dots HTML render instead of showing as literal escaped tag text.
                 chatbot_ui = gr.Chatbot(show_label = False, elem_classes = "chat-window", sanitize_html = False)
-                msg_input = gr.Textbox(placeholder = "Message...", show_label = False)
+                with gr.Row(elem_classes = "msg-row"):
+                    msg_input = gr.Textbox(placeholder = "Message...", show_label = False, elem_classes = "msg_input", scale = 4)
+                    send_btn = gr.Button("➤", elem_classes = "send-btn", scale = 0, min_width = 40)
                 clear_btn = gr.ClearButton([msg_input, chatbot_ui])
 
         # Overlay for viewing the chasracter details (read only, no editing)
         with gr.Column(visible = False, elem_classes = "modal-overlay") as screen_char_details:
             with gr.Group(elem_classes = "modal-card"):
-                char_details_text = gr.Markdown()
-                close_details_btn = gr.Button("Close", elem_classes = "btn-secondary")
+                char_details_avatar = gr.Image(
+                    show_label = False, container = False, interactive = False,
+                    elem_classes = "modal-avatar",
+                )
+                char_details_text = gr.Markdown(elem_classes = "modal-body", container = False)
+                close_details_btn = gr.Button("Close", elem_classes = "btn-secondary modal-close-btn")
+
+        # Overlay for viewing the user's OWN profile details (alias/gender/age/context), accessible from any chat
+        with gr.Column(visible = False, elem_classes = "modal-overlay") as screen_my_profile:
+            with gr.Group(elem_classes = "modal-card"):
+                my_profile_text = gr.Markdown(elem_classes = "modal-body", container = False)
+                close_my_profile_btn = gr.Button("Close", elem_classes = "btn-secondary modal-close-btn")
 
         # OVERLAY: leave-confirmation
         with gr.Column(visible = False, elem_classes = "modal-overlay") as screen_leave_confirm:
@@ -616,6 +828,7 @@ with gr.Blocks(title = "Character Studio") as demo:
                 gr.update(visible = True), gr.update(visible = False),
                 gr.update(),
                 gr.update(value = "Please enter a name to continue.", visible = True),
+                gr.update(),
             )
         profile = {
             "alias": alias.strip(),
@@ -626,19 +839,19 @@ with gr.Blocks(title = "Character Studio") as demo:
         return (
             gr.update(visible = False), gr.update(visible = True),
             profile,
-            gr.update(visible = False),
+            gr.update(visible = False), gr.update(visible = False),
         )
 
     # Wire button
     continue_to_form_btn.click(
         fn = submit_profile,
         inputs = [alias_input, profile_gender, profile_age, profile_context],
-        outputs = [screen_welcome, app_row, user_profile_state, alias_error],
+        outputs = [screen_welcome, app_row, user_profile_state, alias_error, sidebar_col],
     )
     alias_input.submit(
         fn = submit_profile,
         inputs = [alias_input, profile_gender, profile_age, profile_context],
-        outputs = [screen_welcome, app_row, user_profile_state, alias_error],
+        outputs = [screen_welcome, app_row, user_profile_state, alias_error, sidebar_col],
     )
 
     # ----------------------------------------------------------------
@@ -761,6 +974,7 @@ with gr.Blocks(title = "Character Studio") as demo:
 
             # sd_generating_state -> True, a generation is now in flight
             True,
+            gr.update(),
         )
 
         img = avatar_gen.generate_avatar(appearance)
@@ -774,13 +988,13 @@ with gr.Blocks(title = "Character Studio") as demo:
         new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": img, "history": [], "profile": profile}
 
         for step in _finish_character_creation(new_char, profile, characters):
-            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False)
+            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
 
     # Wire button
     generate_avatar_btn.click(
         fn = do_generate_avatar,
         inputs = [char_appearance, user_profile_state, char_name, char_personality, char_lorebook, characters_state],
-        outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state],
+        outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state, sidebar_col],
     )
 
     def skip_avatar(profile, name, personality, appearance, lorebook, characters):
@@ -812,9 +1026,11 @@ with gr.Blocks(title = "Character Studio") as demo:
 
             # sd_generating_state -> True
             True,
+            gr.update(),
         )
         
         placeholder = make_placeholder_avatar(name)
+        avatar_gen.release_gpu_memory()
 
         # Check if user left during generation
         if _generation_state["cancelled"]:
@@ -824,21 +1040,21 @@ with gr.Blocks(title = "Character Studio") as demo:
         new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": placeholder, "history": [], "profile": profile}
 
         for step in _finish_character_creation(new_char, profile, characters):
-            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False)
+            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
 
 
     # Wire button
     skip_avatar_btn.click(
         fn = skip_avatar,
         inputs = [user_profile_state, char_name, char_personality, char_appearance, char_lorebook, characters_state],
-        outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state],
+        outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state, sidebar_col],
     )
 
     # ----------------------------------------------------------------
     # Callbacks: navigation gated behind still generating check
     # ----------------------------------------------------------------
 
-    def handle_new_character_click(generating):
+    def handle_new_character_click(generating, current_idx):
         """
         handle_new_character_click: if a generation is in flight, shows the
         leave-confirmation overlay instead of navigating immediately;
@@ -846,21 +1062,46 @@ with gr.Blocks(title = "Character Studio") as demo:
         """
         if generating:
             return (
-                "new_character", gr.update(visible = True),
-                gr.update(), gr.update(), gr.update(), gr.update(),
-                gr.update(), gr.update(), gr.update(), gr.update(),
-                gr.update(), gr.update(), gr.update(), gr.update(),
+                "new_character",                      # pending_action_state
+                gr.update(visible=True),              # screen_leave_confirm
+
+                gr.update(),                          # char_name
+                gr.update(),                          # char_personality
+                gr.update(),                          # char_appearance
+                gr.update(),                          # char_lorebook
+
+                gr.update(),                          # current_index
+                gr.update(),                          # screen_chat
+                gr.update(),                          # screen_popup
+                gr.update(),                          # screen_form
+                gr.update(),                          # form_error
+                gr.update(),                          # generate_avatar_btn
+                gr.update(),                          # skip_avatar_btn
+                gr.update(),                          # popup_loading
+
+                gr.update(),                          # screen_welcome
+                gr.update(),                          # app_row
+                gr.update(),                          # user_profile_state
+                gr.update(),                          # alias_error
+                gr.update(),                          # sidebar_col
+
+                gr.update(),                          # previous_index_state
+                gr.update(),                          # cancel_from_welcome_btn
+                gr.update(),                          # cancel_from_form_btn
+                gr.update(),                          # cancel_from_popup_btn
             )
 
         char_blanks = start_new_character_updates()
         profile_blanks = start_new_character_profile_updates()
-        return (None, gr.update(visible = False), *char_blanks, *profile_blanks)    
+
+        has_previous = current_idx is not None
+        return (None, gr.update(visible = False), *char_blanks, *profile_blanks, gr.update(visible = False), current_idx, gr.update(visible = has_previous), gr.update(visible = has_previous), gr.update(visible = has_previous))    
 
     # Wire button
     new_char_btn.click(
         fn = handle_new_character_click,
-        inputs = [sd_generating_state],
-        outputs = [pending_action_state, screen_leave_confirm, char_name, char_personality, char_appearance, char_lorebook, current_index, screen_chat, screen_popup, screen_form, form_error, generate_avatar_btn, skip_avatar_btn, popup_loading, screen_welcome, app_row, user_profile_state, alias_error],
+        inputs = [sd_generating_state, current_index],
+        outputs = [pending_action_state, screen_leave_confirm, char_name, char_personality, char_appearance, char_lorebook, current_index, screen_chat, screen_popup, screen_form, form_error, generate_avatar_btn, skip_avatar_btn, popup_loading, screen_welcome, app_row, user_profile_state, alias_error, sidebar_col, previous_index_state, cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn],
     )
 
     # Loop through every character slot in the sidebar and set up a click handler for each one
@@ -929,7 +1170,50 @@ with gr.Blocks(title = "Character Studio") as demo:
         """
         stay: "Stay" on the confirmation overlay (just hide it, nothing else changes).
         """
-        return gr.update(visible=False)
+        return gr.update(visible = False)
+
+    def cancel_character_creation(previous_index, characters):
+        """
+        cancel_character_creation: Gradio callback for the "← Back to chat" button, shown on the profile,
+        character form, and avatar popup screens once there's already at least one character. Lets the user
+        bail out of creating a new character and jump straight back to whichever chat they came from.
+
+        Input(s):
+            previous_index: index into characters, saved by handle_new_character_click right before it
+                cleared current_index to build a new one.
+            characters: the current characters_state list.
+        """
+        if previous_index is None or previous_index >= len(characters):
+            # Shouldn't normally happen (the button is only shown when there IS a previous character)
+            return (
+                gr.update(visible = False), gr.update(visible = True), gr.update(visible = False),
+                gr.update(visible = True), gr.update(visible = False), gr.update(visible = False),
+                gr.update(), gr.update(), gr.update(), gr.update(),
+                gr.update(), gr.update(), gr.update(), gr.update(),
+            )
+
+        loaded = load_character_by_index(previous_index, characters)
+        # loaded = (idx, avatar, history, header_name, name, personality, appearance, lorebook, form_vis, popup_vis, chat_vis)
+        return (
+            gr.update(visible = False),  # screen_welcome: hide, we're heading back to the chat
+            gr.update(visible = True),   # app_row: reveal (sidebar + main content)
+            gr.update(visible = True),   # sidebar_col: reveal, we're back on the chat screen
+            loaded[8], loaded[9], loaded[10],  # screen_form, screen_popup, screen_chat
+            loaded[0], loaded[1], loaded[2], loaded[3],  # current_index, avatar_display, chatbot_ui, chat_header_name
+            loaded[4], loaded[5], loaded[6], loaded[7],  # char_name, char_personality, char_appearance, char_lorebook
+        )
+
+    # Wire all three Back buttons to the same handler
+    for cancel_btn in [cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn]:
+        cancel_btn.click(
+            fn = cancel_character_creation,
+            inputs = [previous_index_state, characters_state],
+            outputs = [
+                screen_welcome, app_row, sidebar_col, screen_form, screen_popup, screen_chat,
+                current_index, avatar_display, chatbot_ui, chat_header_name,
+                char_name, char_personality, char_appearance, char_lorebook,
+            ],
+        )
 
     # Wire button
     stay_btn.click(fn = stay, inputs = [], outputs = [screen_leave_confirm])
@@ -943,13 +1227,14 @@ with gr.Blocks(title = "Character Studio") as demo:
         show_details: Gradio callback for the "i" button in the chat header.
         """
         if idx is None or idx >= len(characters):
-            return gr.update(), gr.update(visible=False)
-        return format_character_details(characters[idx]), gr.update(visible=True)
+            return gr.update(), gr.update(), gr.update(visible = False)
+        c = characters[idx]
+        return c["avatar"], format_character_details(c), gr.update(visible = True)
 
     # Wire button
     details_btn.click(
         fn = show_details, inputs = [current_index, characters_state],
-        outputs = [char_details_text, screen_char_details],
+        outputs = [char_details_avatar, char_details_text, screen_char_details],
     )
 
     def close_details():
@@ -960,6 +1245,28 @@ with gr.Blocks(title = "Character Studio") as demo:
 
     # Wire button
     close_details_btn.click(fn = close_details, inputs = [], outputs = [screen_char_details])
+
+    def show_my_profile(profile):
+        """
+        show_my_profile: Gradio callback for the "⚙️" button in the chat header, lets the user check what
+        profile details they entered for themselves without leaving the current chat.
+        """
+        return format_user_profile(profile), gr.update(visible = True)
+
+    # Wire button
+    my_profile_btn.click(
+        fn = show_my_profile, inputs = [user_profile_state],
+        outputs = [my_profile_text, screen_my_profile],
+    )
+
+    def close_my_profile():
+        """
+        close_my_profile: hides the my-profile overlay.
+        """
+        return gr.update(visible = False)
+
+    # Wire button
+    close_my_profile_btn.click(fn = close_my_profile, inputs = [], outputs = [screen_my_profile])
 
     # ----------------------------------------------------------------
     # Callbacks: chat
@@ -1022,6 +1329,13 @@ with gr.Blocks(title = "Character Studio") as demo:
         yield gr.update(interactive = True), display_history, characters
 
     msg_input.submit (
+        fn = user_chat, 
+        inputs = [msg_input, user_profile_state, characters_state, current_index], 
+        outputs = [msg_input, chatbot_ui, characters_state]
+    )
+
+    # Same callback wired to the send utton so it does the same thing as pressinf enter
+    send_btn.click (
         fn = user_chat, 
         inputs = [msg_input, user_profile_state, characters_state, current_index], 
         outputs = [msg_input, chatbot_ui, characters_state]

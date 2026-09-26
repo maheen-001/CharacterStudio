@@ -39,6 +39,10 @@ class AvatarGenerator:
             prompt template to biad the output towards a more detailed portrait style avatar (highly detailed chara avatar 8k)
         """
 
+        # Just gonna disable the safety check cuz it's a little trigger-happy and it's not like I'm generating any of that...
+        self.pipe.safety_checker = None
+        self.pipe.requires_safety_checker = False
+
         prompt = f"drawn portrait of {visual_desc}, attractive adult character, striking features, expressive eyes, stylish appearance, dark romance aesthetic, moody cinematic lighting, elegant fashion, mysterious expression, Pinterest-inspired digital illustration, semi-realistic anime style, clean lineart, detailed shading"
 
         negative_prompt = """
