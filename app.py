@@ -21,7 +21,7 @@ app.py: A self-contained Gradio web app that walks a user through a 4-step flow:
 """
 
 # Imports
-import os
+import os, random
 import gradio as gr
 from PIL import Image, ImageDraw, ImageFont
 from image_gen import AvatarGenerator
@@ -58,6 +58,24 @@ BAYMAX_LOREBOOK = (
 # can't just be a gr.State.
 _generation_state = {"cancelled": False}
 
+# Archetype hints that are randomly sampled by the "Surprise Me" button
+RANDOM_CHARACTER_ARCHETYPES = [
+    "a sharp-tongued, image-obsessed 'mean girl' type who looks down on others",
+    "a cocky, arrogant 'mean boy' type who thrives on one-upping people",
+    "a warm, endlessly supportive best friend type",
+    "a brooding anti-hero with a hidden soft side",
+    "a chaotic-good trickster who loves stirring up fun",
+    "a stoic mentor figure with hard-earned wisdom",
+    "a flirtatious charmer who's a little too smooth for their own good",
+    "an awkward, lovable nerd who overthinks everything",
+    "a fantasy character (wizard, knight, rogue, etc.) with a distinct personality",
+    "a sci-fi character (AI, alien, android) grappling with being not-quite-human",
+    "a villain who genuinely believes they're the hero of their own story",
+    "a shy, soft-spoken character who slowly opens up over time",
+]
+RANDOM_CHARACTER_GENDERS = ["male", "female"]
+
+
 def make_placeholder_avatar(name: str) -> Image.Image:
     """
     make_placeholder_avatar: Builds a simple solid-color square avatar bearing the character's initial, used 
@@ -86,6 +104,7 @@ def make_placeholder_avatar(name: str) -> Image.Image:
     )
     return img
 
+
 def format_character_details(c: dict) -> str:
     """
     format_character_details: builds the read-only Markdown text shown in the character-details popup.
@@ -103,6 +122,7 @@ def format_character_details(c: dict) -> str:
         f"### Appearance:\n{c['appearance']}"
         f"{lore_section}"
     )
+
 
 def format_user_profile(profile: dict) -> str:
     """
@@ -206,14 +226,25 @@ with gr.Blocks(title = "Character Studio") as demo:
             for _slot in sidebar_rows:
                 sidebar_output_components += [_slot["row"], _slot["avatar"], _slot["name_btn"]]
 
+            # The name buttons only, used to (un)lock sidebar nav during non-cancellable generation states.
+            sidebar_name_buttons = [_slot["name_btn"] for _slot in sidebar_rows]
+
         # Main content
         with gr.Column(scale = 3, elem_classes = "main-content"):
 
             # SCREEN 2: character creation form
             with gr.Column(visible = True, elem_classes = "screen") as screen_form:
                 gr.Markdown("Step 2 of 4", elem_classes = "step-caption")
+
+                # back button
                 cancel_from_form_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
+                
                 gr.Markdown("## Build your character")
+
+                # random character (Surprise Me) button
+                random_char_btn = gr.Button("🎲 Surprise me with a random character", elem_classes = "btn-secondary random-char-btn")
+                random_char_loading = gr.Markdown("Dreaming up a character...", visible = False, elem_classes = "step-caption")
+
                 with gr.Group(elem_classes = "form-card"):
                     char_name = gr.Textbox(label = "Name", value = "Baymax")
                     char_personality = gr.Textbox(
@@ -327,12 +358,14 @@ with gr.Blocks(title = "Character Studio") as demo:
                 updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "")]
         return updates
 
+
     def no_op_sidebar_updates():
         """
         no_op_sidebar_updates: used during token-by-token streaming so we aren't recomputing all 10 sidebar rows on every single chunk.
             -> leaves everything as is, basically
         """
         return [gr.update() for _ in range(MAX_CHARACTERS * 3)]
+
 
     def load_character_by_index(idx, characters):
         """
@@ -354,6 +387,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             gr.update(visible = False), gr.update(visible = False), gr.update(visible = True),
         )
 
+
     def start_new_character_updates():
         """
         start_new_character_updates: the field/screen updates for jumping
@@ -366,6 +400,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             gr.update(visible = True), gr.update(visible = False),
             gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False),
         )
+
 
     def start_new_character_profile_updates():
         """
@@ -450,6 +485,56 @@ with gr.Blocks(title = "Character Studio") as demo:
         outputs = [screen_form, screen_popup, form_error],
     )
 
+
+    def generate_random_character():
+        """
+        generate_random_character: Gradio callback for the "🎲 Surprise Me" button on thr character form.
+        Picls a random archetyle hint so repeated clicks produce variety, asks the chatbot to invent a full character,
+        and then fills the name/personality/appearance fields weith it.
+
+        Is a generator function so that the button can lock and show a loading message while Ollama is generating.
+            -> Non-streaming, so one "before" yield and one "after" yield.
+        """
+        archetype = random.choice(RANDOM_CHARACTER_ARCHETYPES)
+        gender = random.choice(RANDOM_CHARACTER_GENDERS)
+
+        # FIRST YIELD: lock the button + every nav button that could pull user away, show the loading caption, and leave the form fields untouched
+        yield (
+            gr.update(interactive = False), gr.update(visible = True),
+            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
+            gr.update(interactive = False), gr.update(interactive = False), gr.update(interactive = False),
+            *[gr.update(interactive = False) for _ in sidebar_name_buttons],
+        )
+
+        char = bot.generate_random_character(archetype_hint = archetype, gender_hint = gender)
+
+        # Fallbacks in case any field came back empty
+        name = char["name"] or "Mystery Character"
+        personality = char["personality"] or "A mysterious figure whose personality is still coming into focus."
+        appearance = char["appearance"] or "Their appearance shifts depending on who's looking."
+
+        # SECOND YILED: unlock all buttons, hide the laoding caption, and fill in the generated chara
+        yield (
+            gr.update(interactive = True), gr.update(visible = False),
+            name, personality, appearance,
+            # char_lorebook is untouched
+            gr.update(),
+            # clear any leftover form_error
+            gr.update(visible = False),
+            gr.update(interactive = True), gr.update(interactive = True), gr.update(interactive = True),
+            *[gr.update(interactive = True) for _ in sidebar_name_buttons],
+        )
+
+
+    # Wire Button
+    random_char_btn.click(
+        fn = generate_random_character,
+        inputs = [],
+        outputs = [random_char_btn, random_char_loading, char_name, char_personality, char_appearance, char_lorebook, form_error,
+                   continue_to_avatar_btn, new_char_btn, cancel_from_form_btn, *sidebar_name_buttons],
+    )
+
+
     # ----------------------------------------------------------------
     # Callbacks: avatar generation + greeting (cancellable)
     # ----------------------------------------------------------------
@@ -512,6 +597,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             *no_op_sidebar_updates(), gr.update(interactive = True),
         )
 
+
     def do_generate_avatar(appearance, profile, name, personality, lorebook, characters):
         """
         do_generate_avatar: Gradio callback for the generate avatar button on the popup screen. Disables bth popup buttons,
@@ -564,6 +650,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         inputs = [char_appearance, user_profile_state, char_name, char_personality, char_lorebook, characters_state],
         outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state, sidebar_col],
     )
+
 
     def skip_avatar(profile, name, personality, appearance, lorebook, characters):
         """
@@ -696,6 +783,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             outputs = [pending_action_state, screen_leave_confirm, current_index, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, screen_form, screen_popup, screen_chat],
         )
 
+
     def confirm_leave(pending_action, characters):
         """
         confirm_leave: "Leave anyway" on the confirmation overlay. Sets the cancellation flag so the 
@@ -734,11 +822,13 @@ with gr.Blocks(title = "Character Studio") as demo:
         outputs = [screen_leave_confirm, sd_generating_state, current_index, screen_chat, screen_popup, screen_form, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, generate_avatar_btn, skip_avatar_btn, popup_loading],
     )
 
+
     def stay():
         """
         stay: "Stay" on the confirmation overlay (just hide it, nothing else changes).
         """
         return gr.update(visible = False)
+
 
     def cancel_character_creation(previous_index, characters):
         """
@@ -805,6 +895,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         outputs = [char_details_avatar, char_details_text, screen_char_details],
     )
 
+
     def close_details():
         """
         close_details: hides the character-details overlay.
@@ -813,6 +904,7 @@ with gr.Blocks(title = "Character Studio") as demo:
 
     # Wire button
     close_details_btn.click(fn = close_details, inputs = [], outputs = [screen_char_details])
+
 
     def show_my_profile(profile):
         """
@@ -826,6 +918,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         fn = show_my_profile, inputs = [user_profile_state],
         outputs = [my_profile_text, screen_my_profile],
     )
+
 
     def close_my_profile():
         """

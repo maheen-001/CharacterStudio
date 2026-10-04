@@ -2,6 +2,7 @@
 
 # Imports
 import ollama
+import json
 
 # Send onlt this many of the most recent messages to Ollama each turn; anything older is expected to
 # already be folded into the character's memory_summary (by the caller).
@@ -40,18 +41,26 @@ class CharacterChatbot:
             f"style of Character.AI. Your traits and personality: {char_personality}. "
             f"Never narrate or speak for the user. Stay in character at all costs.\n\n"
             f"FORMATTING -- follow this structure exactly:\n"
-            f"- Alternate between short action/thought beats and spoken dialogue, each on its OWN line, "
+            f"- You MUST include AT LEAST 3 beats per reply (a 'beat' is one action/thought OR one line of "
+            f"dialogue), and may go up to 6 for emotionally significant moments. A reply with only one action "
+            f"and one line of dialogue is too short -- do not stop there.\n"
+            f"- Alternate between action/thought beats and spoken dialogue, each on its OWN line, "
             f"separated by a blank line. Never combine an action and a line of dialogue into the same line.\n"
             f'- Wrap every action, gesture, or internal thought in *asterisks*, e.g. *tilts head, considering this*\n'
             f'- Wrap every spoken line in "quotation marks", e.g. "That\'s an interesting question."\n'
-            f"- Use 2-4 beats/lines total per reply (mix of action and dialogue), more only for emotionally "
-            f"significant moments. Each individual line should be a sentence or two -- not a full paragraph "
-            f"crammed together.\n\n"
+            f"- Each individual line should be a sentence or two -- not a full paragraph crammed together.\n"
+            f"- DRIVE THE SCENE FORWARD: don't just describe the current moment or atmosphere and stop there. "
+            f"Introduce a new detail, ask the user a question, react with a changing emotion, or suggest an "
+            f"action -- give the user something concrete to respond to, rather than ending on a static "
+            f"description.\n\n"
             f"Example of the exact shape to follow (content is just an illustration, not your actual personality):\n"
             f"*She glances up from the book, a slow smile spreading across her face.*\n\n"
             f'"I wasn\'t expecting you to come find me here."\n\n'
-            f"*She sets the book down, patting the seat beside her.*\n\n"
-            f'"Sit with me for a while?"'
+            f"*She sets the book down, patting the seat beside her, eyes flicking toward the window where "
+            f"the storm is picking up.*\n\n"
+            f'"Sit with me for a while? I think it\'s going to get loud out there, and I\'d rather not be '
+            f'alone for it."\n\n'
+            f"*She shifts over, leaving just enough room, watching to see what you'll do.*"
         )
 
         # Fold in the lorebook (world notes) if one was provided
@@ -191,6 +200,55 @@ class CharacterChatbot:
         # Get and return
         response = ollama.chat(model = self.model_name, messages = [{"role": "user", "content": prompt}], stream = False)
         return response.get("message", {}).get("content", "").strip()
+
+
+    def generate_random_character(self, archetype_hint = None, gender_hint = None):
+        """
+        generate_random_character: asks the LLM to invent a new chara (name, personality, appearance) for the character creation
+        form's "Surprise Me" button.
+
+        Input(s):
+            archetype_hint and gender_hint: a short string to give direction to the type of character that's generated, and their gender
+
+        Outputs/Returns: a dict with keys "name", "personality", and "appearance".
+        """
+        # Build prompt
+        prompt = "Invent an original roleplay character for a chat app, in the style of Character.AI. "
+        if archetype_hint:
+            prompt += f"The character should fit this general vibe: {archetype_hint}. "
+        if gender_hint:
+            prompt += f"The character should be {gender_hint}. "
+
+        prompt += (
+            "Respond with ONLY a valid JSON object (no markdown fences, no extra text) with exactly "
+            "these four string keys:\n"
+            '- "name": the character\'s name (just a name, 1-3 words)\n'
+            '- "personality": 2-4 sentences describing their personality, speech patterns, and quirks\n'
+            '- "appearance": 1-2 sentences describing what they look like\n'
+            "Make the character vivid and specific, not generic."
+        )
+
+        # Send the prompt and get the raw json output
+        response = ollama.chat(
+            model = self.model_name,
+            messages = [{"role": "user", "content": prompt}],
+            stream = False,
+            format = "json",
+        )
+        raw = response.get("message", {}).get("content", "").strip()
+
+        # Unload the JSON, fallback to empty strings instead of crashinf if the model failed to give a clean JSON
+        try:
+            data = json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            data = {}
+
+        return {
+            "name": str(data.get("name", "")).strip(),
+            "personality": str(data.get("personality", "")).strip(),
+            "appearance": str(data.get("appearance", "")).strip(),
+            "lorebook": str(data.get("lorebook", "")).strip(),
+        }
 
 
 def _flatten_content(content):
