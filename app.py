@@ -25,7 +25,7 @@ import os
 import gradio as gr
 from PIL import Image, ImageDraw, ImageFont
 from image_gen import AvatarGenerator
-from chatbot import CharacterChatbot
+from chatbot import CharacterChatbot, MAX_RECENT_MESSAGES
 
 # Initialize models
 avatar_gen = AvatarGenerator()
@@ -118,9 +118,9 @@ def format_user_profile(profile: dict) -> str:
     if profile.get("gender"):
         lines.append(f"### Gender:\n{profile['gender']}")
     if profile.get("age"):
-        lines.append(f"###vAge:\n{profile['age']}")
+        lines.append(f"### Age:\n{profile['age']}")
     if profile.get("context"):
-        lines.append(f"###Context:\n{profile['context']}")
+        lines.append(f"### Context:\n{profile['context']}")
     if len(lines) == 1:
         # Nothing but the alias was ever filled in
         lines.append("_No other details were added._")
@@ -486,7 +486,9 @@ with gr.Blocks(title = "Character Studio") as demo:
         # Stream the greeting in, overwriting the typing indicator with growing text as tokens arrive
         #     -> Sidebar/avatar/header stay unchanged during this loop (no_op_sidebar_updates)
         for partial_greeting in bot.greet(
-            new_char["name"], new_char["personality"], char_lorebook = new_char.get("lorebook"), user_profile = new_char.get("profile", {})
+            new_char["name"], new_char["personality"],
+            char_lorebook = new_char.get("lorebook"), user_profile = new_char.get("profile", {}),
+            memory_summary = new_char.get("memory_summary", ""),
         ):
             display_history[-1]["content"] = partial_greeting
             yield (
@@ -551,7 +553,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             _generation_state["cancelled"] = False
             return
 
-        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": img, "history": [], "profile": profile}
+        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": img, "history": [], "profile": profile, "memory_summary": "", "summarized_through": 0}
 
         for step in _finish_character_creation(new_char, profile, characters):
             yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
@@ -603,7 +605,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             _generation_state["cancelled"] = False
             return
         
-        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": placeholder, "history": [], "profile": profile}
+        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": placeholder, "history": [], "profile": profile, "memory_summary": "", "summarized_through": 0}
 
         for step in _finish_character_creation(new_char, profile, characters):
             yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
@@ -879,6 +881,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         # bot.respond is the generator from chatbot.py; each yield from it hands back the reply accumulated so far
         for partial_reply in bot.respond(
             user_msg, prior_history, char["name"], char["personality"], char_lorebook = char.get("lorebook"), user_profile = char.get("profile", {}),
+            memory_summary = char.get("memory_summary", ""),
         ):
             # Overwrite the last item in display_history (the empty or partial assistant bubble) with the latest text
             display_history[-1]["content"] = partial_reply
@@ -888,6 +891,24 @@ with gr.Blocks(title = "Character Studio") as demo:
         # Ollama message completed, update character's record to preserve history
         updated_char = dict(char)
         updated_char["history"] = display_history
+
+        # Implement simple memory: once convo grows past the varbatim window, fold whatever just aged out of it into the running memory_summary so tha future
+        # turns stay aware of it without needing to resend the entire history each time
+        
+        # Find lengths
+        already_summarized = updated_char.get("summarized_through", 0)
+        keep_verbatim = len(display_history) - MAX_RECENT_MESSAGES
+
+        # New messages outside of the verbatim window -> summarize them
+        if keep_verbatim > already_summarized:
+            turns_to_fold = display_history[already_summarized:keep_verbatim]
+            if turns_to_fold:
+                updated_char["memory_summary"] = bot.summarize(
+                    turns_to_fold, char["name"], existing_summary = updated_char.get("memory_summary", "")
+            )
+                updated_char["summarized_through"] = keep_verbatim
+
+        # Save the updated character
         characters[idx] = updated_char
 
         # THIRD YIELD: pushes the saved state to the UI one more time, guarsanteeing that the UI reflects the fully saved characters_state, not jsut the local display_history
