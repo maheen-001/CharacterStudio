@@ -1,0 +1,442 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap');
+
+.gradio-container, .gradio-container > div, .contain, .app, #root, .main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: none !important;
+    width: 100% !important;
+}
+
+.app-row, .app-row > *, .main-content, .main-content > * {
+    gap: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+html, body {
+    height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.gradio-container {
+    --bg: #FFFFFF;
+    --panel: #FFF3F7;
+    --panel-border: #F3C6D9;
+    --accent: #E23F84;
+    --accent-soft: rgba(226, 63, 132, 0.12);
+    --text: #2B1420;
+    --text-muted: #A9788C;
+    --error: #D64550;
+
+    background: var(--bg) !important;
+    color: var(--text) !important;
+    font-family: 'IBM Plex Sans', sans-serif;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 100vh;
+}
+
+.gradio-container h1, .gradio-container h2, .gradio-container h3 {
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--text) !important;
+}
+
+.screen {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 3rem 1.5rem;
+}
+.main-content > .screen:not(.chat-screen) {
+    margin: 0 auto !important;
+    padding: 3rem 1.5rem !important;
+}
+.step-caption {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 0.8rem;
+    letter-spacing: 0.03em;
+    color: var(--text-muted) !important;
+    margin-bottom: 0.5rem;
+    text-align: center !important;
+    width: 100%;
+}
+.welcome-heading h2 { font-size: 2rem; line-height: 1.25; margin-bottom: 1.5rem; }
+.alias-input textarea, .alias-input input {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 2px solid var(--panel-border) !important;
+    border-radius: 0 !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-size: 1.5rem !important;
+    color: var(--accent) !important;
+    padding: 0.5rem 0 !important;
+    box-shadow: none !important;
+}
+.alias-input textarea:focus, .alias-input input:focus { border-bottom-color: var(--accent) !important; }
+
+.profile-extra label { font-family: 'IBM Plex Sans', sans-serif !important; font-size: 0.85rem !important; color: var(--text-muted) !important; }
+.profile-extra textarea, .profile-extra input {
+    background: var(--panel) !important;
+    border: 1px solid var(--panel-border) !important;
+    color: var(--text) !important;
+}
+
+.form-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 1.75rem;
+    position: relative;
+}
+.form-card label { font-family: 'IBM Plex Sans', sans-serif !important; font-size: 0.85rem !important; color: var(--text-muted) !important; }
+.form-card textarea, .form-card input { background: var(--bg) !important; border: 1px solid var(--panel-border) !important; color: var(--text) !important; }
+
+.popup-card {
+    background: var(--panel);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 2rem;
+    max-width: 420px;
+    margin: 3rem auto;
+    text-align: center;
+}
+.popup-loading { margin: 1.5rem 0 !important; }
+
+.btn-primary, .btn-primary button {
+    background: var(--accent) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    font-weight: 600 !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+}
+.btn-secondary, .btn-secondary button {
+    background: transparent !important;
+    color: var(--text-muted) !important;
+    border: 1px solid var(--panel-border) !important;
+}
+.field-error { color: var(--error) !important; font-size: 0.9rem; }
+
+/* App layout: full-height sidebar + full-height main content, no centered
+   max-width wrapper for the overall page. */
+.app-row {
+    min-height: 100vh;
+    align-items: stretch !important;
+}
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 100vh;
+    padding: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--panel-border);
+}
+.main-content {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+.sidebar-new-btn, .sidebar-new-btn button { margin: 1rem 1rem 0.5rem 1rem; width: calc(100% - 2rem); }
+
+.sidebar-row {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    width: 100%;
+    box-sizing: border-box !important;
+}
+
+/* Keep the avatar column fixed and let the name column take the remaining space. */
+.sidebar-row > .gr-column:first-child {
+    flex: 0 0 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+}
+
+.sidebar-row > .gr-column:last-child {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+}
+
+.sidebar-avatar {
+    position: relative !important;
+    width: 40px !important;
+    height: 40px !important;
+    flex-shrink: 0 !important;
+    overflow: hidden !important;
+    border-radius: 50%;
+}
+.sidebar-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center !important;
+}
+.sidebar-avatar .icon-buttons,
+.sidebar-avatar button[aria-label="Fullscreen"],
+.sidebar-avatar button[aria-label="Download"] { display: none !important; }
+
+.chat-header-avatar {
+    position: relative !important;
+    width: 44px !important;
+    height: 44px !important;
+    flex-shrink: 0 !important;
+    overflow: hidden !important;
+    border-radius: 50%;
+}
+.chat-header-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 44px !important;
+    height: 44px !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center !important;
+}
+.chat-header-avatar .icon-buttons,
+.chat-header-avatar button[aria-label="Fullscreen"],
+.chat-header-avatar button[aria-label="Download"] { display: none !important; }
+
+.sidebar-name-btn, .sidebar-name-btn button {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--text) !important;
+    font-family: 'Space Grotesk', sans-serif !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    padding: 0 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Chat screen: fills all remaining space rather than being capped at the
+   640px "screen" width used by the other steps. */
+.chat-screen {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 100vh;
+}
+.chat-header {
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--panel-border);
+}
+.chat-header-name { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 1.15rem; }
+.details-btn, .details-btn button {
+    background: none !important;
+    border: 1px solid var(--panel-border) !important;
+    color: var(--text-muted) !important;
+    border-radius: 50% !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+    padding: 0 !important;
+}
+.chat-window { flex: 1; }
+
+.typing-indicator { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+.typing-indicator .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text-muted);
+    animation: bounce 1.2s infinite ease-in-out;
+}
+.typing-indicator .dot:nth-child(2) { animation-delay: 0.15s; }
+.typing-indicator .dot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes bounce {
+    0%, 80%, 100% { transform: translateY(0); opacity: .4; }
+    40% { transform: translateY(-5px); opacity: 1; }
+}
+
+.modal-overlay {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(43, 20, 32, 0.45);
+    backdrop-filter: blur(2px);
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    animation: overlay-fade-in 0.15s ease-out;
+}
+@keyframes overlay-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+.modal-card {
+    position: relative;
+    background: var(--bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 2.25rem 2rem 2rem 2rem;
+    max-width: 480px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(226, 63, 132, 0.18), 0 6px 20px rgba(43, 20, 32, 0.10);
+    animation: modal-pop-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+@keyframes modal-pop-in {
+    from { opacity: 0; transform: translateY(8px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Avatar shown at the top of the character-details popup */
+.modal-avatar {
+    position: relative !important;
+    width: 140px !important;
+    height: 140px !important;
+    margin: 0 auto 1.25rem auto !important;
+    border-radius: 18px !important;
+    overflow: hidden !important;
+    border: 3px solid var(--panel);
+    box-shadow: 0 0 0 1px var(--panel-border);
+    background: var(--panel);
+}
+.modal-avatar img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 140px !important;
+    height: 140px !important;
+    max-width: none !important;
+    max-height: none !important;
+    object-fit: cover !important;
+    object-position: center 20% !important;
+}
+.modal-avatar .icon-buttons,
+.modal-avatar button[aria-label="Fullscreen"],
+.modal-avatar button[aria-label="Download"] { display: none !important; }
+
+/* Text content inside the popups */
+.modal-body { text-align: left; }
+.modal-body h2 {
+    text-align: center;
+    font-size: 1.4rem;
+    margin: 0 0 1.25rem 0;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--panel-border);
+}
+.modal-body h3 {
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent) !important;
+    margin: 1.1rem 0 0.35rem 0 !important;
+}
+.modal-body h3:first-of-type { margin-top: 0 !important; }
+.modal-body p {
+    margin: 0 0 0.75rem 0;
+    line-height: 1.5;
+    color: var(--text);
+}
+.modal-body em {
+    color: var(--text-muted);
+}
+.modal-body { 
+    text-align: left; 
+    padding: 0 0.15rem; /* small extra horizontal cushion beyond the card's own padding */
+}
+
+/* Close button: small pill, right-aligned instead of full-width default */
+.modal-close-btn, .modal-close-btn button {
+    display: block;
+    margin: 1.5rem 0.25rem 0.25rem auto !important;
+    width: auto !important;
+    padding: 0.45rem 1.25rem !important;
+    border-radius: 999px !important;
+    font-size: 0.85rem !important;
+}
+
+.app-row {
+    gap: 0 !important;
+    padding: 0 !important;
+}
+.app-row > * {
+    margin: 0 !important;
+}
+
+/* Sidebar header label, above the character list */
+.sidebar-header {
+    padding: 0.5rem 1rem 0.75rem 1rem;
+    font-family: 'Space Grotesk', sans-serif;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text);
+    border-bottom: 1px solid var(--panel-border);
+    margin-bottom: 0.5rem;
+}
+
+/* Chat bubbles: differentiate user vs character, iMessage/WhatsApp style. */
+.chat-window [data-testid*="user"],
+.chat-window .message.user,
+.chat-window .user-row .message {
+    background: var(--accent) !important;
+    color: #FFFFFF !important;
+    border-radius: 18px 18px 4px 18px !important;
+}
+.chat-window [data-testid*="bot"],
+.chat-window .message.bot,
+.chat-window .bot-row .message {
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border-radius: 18px 18px 18px 4px !important;
+}
+
+/* Pill-shaped message input bar with a round send button */
+.msg-row {
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--panel-border);
+}
+.msg-input textarea, .msg-input input {
+    border-radius: 999px !important;
+    border: 1px solid var(--panel-border) !important;
+    padding: 0.6rem 1rem !important;
+}
+.send-btn, .send-btn button {
+    border-radius: 50% !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    padding: 0 !important;
+    background: var(--accent) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+}
+
+.back-btn, .back-btn button {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: var(--text-muted) !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 0.85rem !important;
+    padding: 0 !important;
+    margin-bottom: 1rem;
+    text-align: left !important;
+    justify-content: flex-start !important;
+}
