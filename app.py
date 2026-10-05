@@ -938,16 +938,23 @@ with gr.Blocks(title = "Character Studio") as demo:
     close_details_btn.click(fn = close_details, inputs = [], outputs = [screen_char_details])
 
 
-    def show_my_profile(profile):
+    def show_my_profile(idx, characters):
         """
-        show_my_profile: Gradio callback for the "⚙️" button in the chat header, lets the user check what
-        profile details they entered for themselves without leaving the current chat.
+        show_my_profile: Gradio callback for the "⚙️" button in the chat header, lets the user check what profile
+        details they entered for themselves (the persona on the CURRENTLY active chara) without leaving the current chat.
         """
+        profile = {}
+
+        # Get profile the user set for the current character
+        if idx is not None and idx < len(characters):
+            profile = characters[idx].get("profile", {})
+
         return format_user_profile(profile), gr.update(visible = True)
 
     # Wire button
     my_profile_btn.click(
-        fn = show_my_profile, inputs = [user_profile_state],
+        fn = show_my_profile, 
+        inputs = [current_index, characters_state],
         outputs = [my_profile_text, screen_my_profile],
     )
 
@@ -1059,17 +1066,35 @@ with gr.Blocks(title = "Character Studio") as demo:
     def load_persisted_characters():
         """
         load_persisted_characters: runs once per broswer tab connect (demo.load) to restore
-        previously saved characters from SQLite into characters.state and the sidebar, so a page
-        refresh or app restart doesn't lose anything.
+        previously saved characters + the sidebar. If any exist, we know the user is returning,
+        so onboarding (profile screen and the default Baymax form) will be skipped. Open the
+        newest character instead.
         """
         characters = db.load_all_characters()[-MAX_CHARACTERS:]
-        return (characters, *build_sidebar_updates(characters))
+        sidebar = build_sidebar_updates(characters)
+
+        if not characters:
+            # First-time user, don't touch the onboarding
+            return (characters, *sidebar, *[gr.update() for _ in range(15)])
+
+        # Get and load the newest character + user profile if the user is NOT new
+        idx = len(characters) - 1
+        loaded = load_character_by_index(idx, characters)
+        profile = characters[idx].get("profile", {})
+
+        return (
+            characters, *sidebar,
+            gr.update(visible = False), gr.update(visible = True),
+            profile, *loaded, gr.update(interactive = True),
+        )
 
 
     demo.load(
         fn = load_persisted_characters,
         inputs = [],
-        outputs = [characters_state, *sidebar_output_components],
+        outputs = [characters_state, *sidebar_output_components, screen_welcome, app_row, user_profile_state,
+                   current_index, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook,
+                   screen_form, screen_popup, screen_chat, msg_input],
     )
 
 
