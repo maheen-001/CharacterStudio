@@ -188,10 +188,53 @@ html, body {
     min-width: 40px !important;
 }
 
-.sidebar-row > .gr-column:last-child {
+.sidebar-row > .gr-column:nth-child(2) {
     flex: 1 1 auto !important;
     width: auto !important;
     min-width: 0 !important;
+}
+.sidebar-row > .gr-column:nth-child(3) {
+    flex: 0 0 32px !important;
+    width: 32px !important;
+    min-width: 32px !important;
+}
+
+/* Bin: hidden until the row is hovered */
+.sidebar-delete-btn, .sidebar-delete-btn button {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    width: 32px !important;
+    min-width: 32px !important;
+    height: 32px !important;
+}
+.sidebar-delete-btn {
+    opacity: 0;
+    pointer-events: none;      /* invisible bin can't be clicked by accident */
+    transition: opacity 0.12s ease;
+}
+.sidebar-row:hover .sidebar-delete-btn,
+.sidebar-delete-btn:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+}
+.sidebar-delete-btn button:hover {
+    background: var(--accent-soft) !important;
+    border-radius: 50%;
+}
+/* Touch screens have no hover, so always show it there */
+@media (hover: none) {
+    .sidebar-delete-btn { opacity: 1; pointer-events: auto; }
+}
+
+/* Red confirm button */
+.btn-danger, .btn-danger button {
+    background: var(--error) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    font-weight: 600 !important;
+    font-family: 'Space Grotesk', sans-serif !important;
 }
 
 .sidebar-avatar {

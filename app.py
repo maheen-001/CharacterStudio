@@ -78,7 +78,7 @@ BAYMAX_LOREBOOK = (
 
 # Cancellation flag for avatar gen / greeting streams. Plain dict on purpose, see module docstring above for why this
 # can't just be a gr.State.
-_generation_state = {"cancelled": False}
+_generation_state = {"cancelled": False, "chatting": False}
 
 # Archetype hints that are randomly sampled by the "Surprise Me" button
 RANDOM_CHARACTER_ARCHETYPES = [
@@ -207,6 +207,7 @@ with gr.Blocks(title = "Character Studio") as demo:
     # True while an avatar (Stable Diffusion) gen or greeting stream is in flight -> gate + new chara and sidebar switches behind a leave confirmation
     sd_generating_state = gr.State(False)
     pending_action_state = gr.State(None)
+    pending_delete_state = gr.State(None)
 
     # Which character was active before the + New Character was clicked for the back button to work
     previous_index_state = gr.State(None)
@@ -252,12 +253,14 @@ with gr.Blocks(title = "Character Studio") as demo:
                             )
                         with gr.Column(scale = 1, min_width = 0):
                             _name_btn = gr.Button("", elem_classes = "sidebar-name-btn")
-                    sidebar_rows.append({"row": _row, "avatar": _avatar, "name_btn": _name_btn})
+                        with gr.Column(scale = 0, min_width = 32):
+                            _delete_btn = gr.Button("🗑️", elem_classes = "sidebar-delete-btn")
+                    sidebar_rows.append({"row": _row, "avatar": _avatar, "name_btn": _name_btn, "delete_btn": _delete_btn})
 
             # Flattened list of every sidebar component in a fixed order, used whenever a callback needs to refresh the whole sidebar at once.
             sidebar_output_components = []
             for _slot in sidebar_rows:
-                sidebar_output_components += [_slot["row"], _slot["avatar"], _slot["name_btn"]]
+                sidebar_output_components += [_slot["row"], _slot["avatar"], _slot["name_btn"], _slot["delete_btn"]]
 
             # The name buttons only, used to (un)lock sidebar nav during non-cancellable generation states.
             sidebar_name_buttons = [_slot["name_btn"] for _slot in sidebar_rows]
@@ -365,6 +368,15 @@ with gr.Blocks(title = "Character Studio") as demo:
                 with gr.Row():
                     confirm_leave_btn = gr.Button("Leave anyway", elem_classes = "btn-primary")
                     stay_btn = gr.Button("Stay", elem_classes = "btn-secondary")
+        
+        # OVERLAY: delete a character confirmation
+        with gr.Column(visible = False, elem_classes = "modal-overlay") as screen_delete_confirm:
+            with gr.Group(elem_classes = "modal-card"):
+                gr.Markdown("### Delete character?")
+                delete_confirm_text = gr.Markdown()
+                with gr.Row():
+                    confirm_delete_btn = gr.Button("Delete", elem_classes = "btn-danger")
+                    cancel_delete_btn = gr.Button("Cancel", elem_classes = "btn-secondary")
 
     """
     Helpers
@@ -384,13 +396,14 @@ with gr.Blocks(title = "Character Studio") as demo:
 
         updates = []
         n = len(characters)
+
         for i in range(MAX_CHARACTERS):
             if i < n:
                 # Newest characters first
                 c = characters[n - 1 - i]
-                updates += [gr.update(visible = True), gr.update(value = sidebar_thumb(c["avatar"])), gr.update(value = c["name"], interactive = True)]
+                updates += [gr.update(visible = True), gr.update(value = sidebar_thumb(c["avatar"])), gr.update(value = c["name"], interactive = True), gr.update(interactive = True)]
             else:
-                updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "", interactive = True)]
+                updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "", interactive = True), gr.update(interactive = True)]
         return updates
 
 
@@ -399,7 +412,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         no_op_sidebar_updates: used during token-by-token streaming so we aren't recomputing all 10 sidebar rows on every single chunk.
             -> leaves everything as is, basically
         """
-        return [gr.update() for _ in range(MAX_CHARACTERS * 3)]
+        return [gr.update() for _ in range(MAX_CHARACTERS * 4)]
 
 
     def sidebar_lock_updates(locked):
@@ -410,7 +423,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         updates = []
 
         for _ in range(MAX_CHARACTERS):
-            updates += [gr.update(), gr.update(), gr.update(interactive = not locked)]
+            updates += [gr.update(), gr.update(), gr.update(interactive = not locked), gr.update(interactive = not locked)]
         return updates
 
 
@@ -634,7 +647,7 @@ with gr.Blocks(title = "Character Studio") as demo:
                 gr.update(), gr.update(),
                 gr.update(), gr.update(),
                 characters, new_index, display_history,
-                *no_op_sidebar_updates(), gr.update(),
+                *sidebar_lock_updates(True), gr.update(),
             )
 
         # Check for cancellation
@@ -652,7 +665,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             gr.update(), gr.update(),
             gr.update(), gr.update(),
             characters, new_index, display_history,
-            *no_op_sidebar_updates(), gr.update(interactive = True),
+            *sidebar_lock_updates(False), gr.update(interactive = True),
         )
 
 
@@ -817,7 +830,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         outputs = [pending_action_state, screen_leave_confirm, char_name, char_personality, char_appearance, char_lorebook, current_index, screen_chat, screen_popup, screen_form, form_error, generate_avatar_btn, skip_avatar_btn, popup_loading, screen_welcome, app_row, user_profile_state, alias_error, sidebar_col, previous_index_state, cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn],
     )
 
-    # Loop through every character slot in the sidebar and set up a click handler for each one
+    # Loop through every character slot in the sidebar and set up a click + delete handler for each one
     for i, slot in enumerate(sidebar_rows):
         def handle_sidebar_click(characters, generating, slot_index = i):
             """
@@ -840,10 +853,45 @@ with gr.Blocks(title = "Character Studio") as demo:
             # loaded = (idx, avatar, history, header_name, name, personality, appearance, lorebook, form_vis, popup_vis, chat_vis)
             return (None, gr.update(visible = False), *loaded)
 
+
+        # Wire button
         slot["name_btn"].click(
             fn = handle_sidebar_click,
             inputs = [characters_state, sd_generating_state],
             outputs = [pending_action_state, screen_leave_confirm, current_index, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, screen_form, screen_popup, screen_chat],
+        )
+        
+        def handle_delete_click(characters, generating, slot_index = i):
+            """
+            handle_delete_click: opens the delete confirmation popup for the character in this slot.
+            This is blocked while anything is generating.
+            """
+            # convert slot to a real index
+            real_index = len(characters) - 1 - slot_index
+
+            # No character
+            if real_index < 0:
+                return gr.update(), gr.update(), gr.update()
+
+            # Mid-generation
+            if generating or _generation_state["chatting"]:
+                gr.Info("Wait for the current reply to finish before deleting.")
+                return gr.update(), gr.update(), gr.update()
+
+            # Get name and confirm deletion
+            name = characters[real_index]["name"]
+            return (
+                real_index,
+                f"Delete **{name}**? This permanently removes the character and their chat history.",
+                gr.update(visible = True),
+            )
+        
+
+        # Wire button
+        slot["delete_btn"].click(
+            fn = handle_delete_click,
+            inputs = [characters_state, sd_generating_state],
+            outputs = [pending_delete_state, delete_confirm_text, screen_delete_confirm],
         )
 
 
@@ -885,12 +933,76 @@ with gr.Blocks(title = "Character Studio") as demo:
         outputs = [screen_leave_confirm, sd_generating_state, current_index, screen_chat, screen_popup, screen_form, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, generate_avatar_btn, skip_avatar_btn, popup_loading],
     )
 
-
     def stay():
         """
         stay: "Stay" on the confirmation overlay (just hide it, nothing else changes).
         """
         return gr.update(visible = False)
+
+
+    def confirm_delete(pending_idx, characters, current_idx, previous_idx):
+        """
+        confirm_delete: removes the current character from memory and the db, fixes the indices that pointed
+        past it, and navigates awat if the deleted character was the open chat.
+        """
+        # Get and hide character
+        characters = list(characters)
+        hide = gr.update(visible = False)
+        no_nav = [gr.update() for _ in range(11)]
+
+        # No character/out of range character: do nothihng
+        if pending_idx is None or pending_idx >= len(characters):
+            return (hide, characters, previous_idx, gr.update(), gr.update(),
+                    gr.update(), gr.update(), gr.update(),
+                    *no_op_sidebar_updates(), *no_nav)
+
+        # Get removed character, remove from db
+        removed = characters.pop(pending_idx)
+        if removed.get("db_id") is not None:
+            db.delete_character(removed["db_id"])
+
+        # keep the back button target valid
+        if previous_idx is not None:
+            if previous_idx == pending_idx:
+                previous_idx = None
+            elif previous_idx > pending_idx:
+                previous_idx -= 1
+
+        welcome_u, app_u = gr.update(), gr.update()
+        cancel_u = [gr.update(), gr.update(), gr.update()]
+        nav = no_nav
+
+        # post-removal
+        if current_idx is not None:
+            if current_idx == pending_idx:
+                if characters:
+                    # open the most recently chatted remaining character by default
+                    nav = list(load_character_by_index(len(characters) - 1, characters))
+                else:
+                    # nothing left: back to onboarding (default Baymax screen)
+                    welcome_u, app_u = gr.update(visible = True), gr.update(visible = False)
+                    cancel_u = [gr.update(visible = False)] * 3
+                    nav = [None, gr.update(value = None), [], "", "", "", "", "",
+                        gr.update(visible = True), gr.update(visible = False), gr.update(visible = False)]
+            elif current_idx > pending_idx:
+                nav = [current_idx - 1] + [gr.update() for _ in range(10)]
+
+        return (hide, characters, previous_idx, welcome_u, app_u, *cancel_u,
+                *build_sidebar_updates(characters), *nav)
+
+
+    # Wire button
+    confirm_delete_btn.click(
+        fn = confirm_delete,
+        inputs = [pending_delete_state, characters_state, current_index, previous_index_state],
+        outputs = [
+            screen_delete_confirm, characters_state, previous_index_state, screen_welcome, app_row, cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn,
+            *sidebar_output_components, current_index, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook,
+            screen_form, screen_popup, screen_chat,
+        ],
+    )
+
+    cancel_delete_btn.click(fn = stay, inputs = [], outputs = [screen_delete_confirm])
 
 
     def cancel_character_creation(previous_index, characters):
@@ -1039,18 +1151,36 @@ with gr.Blocks(title = "Character Studio") as demo:
         ]
 
         # FIRST YIELD: pushes the user's message (and the empty assistant bubble) to the UI; disables input
-        yield gr.update(value = "", interactive = False), display_history, characters, gr.update(), *sidebar_lock_updates(True), gr.update(interactive = False)
+        _generation_state["chatting"] = True
+        yield gr.update(value = "", interactive = False), display_history, characters, gr.update(), *sidebar_lock_updates(True), gr.update(interactive = False), gr.update(interactive = False)
 
         # bot.respond is the generator from chatbot.py; each yield from it hands back the reply accumulated so far
-        for partial_reply in bot.respond(
-            user_msg, prior_history, char["name"], char["personality"], char_lorebook = char.get("lorebook"), user_profile = char.get("profile", {}),
-            memory_summary = char.get("memory_summary", ""),
-        ):
-            # Overwrite the last item in display_history (the empty or partial assistant bubble) with the latest text
-            display_history[-1]["content"] = partial_reply
-            # SECOND YIELD: re-render the chat window, acrtually update with new text
-            yield gr.update(), display_history, characters, gr.update(), *no_op_sidebar_updates(), gr.update()
+        try:
+            last_ui_update = 0.0
 
+            for partial_reply in bot.respond(
+                user_msg, prior_history, char["name"], char["personality"], char_lorebook = char.get("lorebook"), user_profile = char.get("profile", {}),
+                memory_summary = char.get("memory_summary", ""),
+            ):
+                # Overwrite the last item in display_history (the empty or partial assistant bubble) with the latest text
+                display_history[-1]["content"] = partial_reply
+
+                now = time.monotonic()
+
+                if now - last_ui_update >= 0.05:
+                    last_ui_update = now
+                    # SECOND YIELD: re-render the chat window, acrtually update with new text
+                    yield gr.update(), display_history, characters, gr.update(), *no_op_sidebar_updates(), gr.update(), gr.update()
+        except Exception:
+            # Ollama errored out mid-reply, re-enable everything so the user isn't stuck with a disabled input box and permanent typing indicator
+            _generation_state["chatting"] = False
+            display_history[-1]["content"] = "*(Something went wrong generating a reply. Please try again.)*"
+            yield (
+                gr.update(interactive = True), display_history, characters, gr.update(),
+                *sidebar_lock_updates(False), gr.update(interactive = True), gr.update(interactive = True),
+            )
+            raise
+        
         # Ollama message completed, update character's record to preserve history
         updated_char = dict(char)
         updated_char["history"] = display_history
@@ -1083,19 +1213,20 @@ with gr.Blocks(title = "Character Studio") as demo:
 
         # THIRD YIELD: pushes the saved state to the UI one more time, guarsanteeing that the UI reflects the fully saved characters_state, not jsut the local display_history
         #    -> Also re-enable input
-        yield gr.update(interactive = True), display_history, characters, new_idx, *build_sidebar_updates(characters), gr.update(interactive = True)
+        _generation_state["chatting"] = False
+        yield gr.update(interactive = True), display_history, characters, new_idx, *build_sidebar_updates(characters), gr.update(interactive = True), gr.update(interactive = True)
 
     msg_input.submit (
         fn = user_chat, 
         inputs = [msg_input, user_profile_state, characters_state, current_index], 
-        outputs = [msg_input, chatbot_ui, characters_state, current_index, *sidebar_output_components, new_char_btn]
+        outputs = [msg_input, chatbot_ui, characters_state, current_index, *sidebar_output_components, new_char_btn, send_btn]
     )
 
     # Same callback wired to the send utton so it does the same thing as pressinf enter
     send_btn.click (
         fn = user_chat, 
         inputs = [msg_input, user_profile_state, characters_state, current_index], 
-        outputs = [msg_input, chatbot_ui, characters_state, current_index, *sidebar_output_components, new_char_btn]
+        outputs = [msg_input, chatbot_ui, characters_state, current_index, *sidebar_output_components, new_char_btn, send_btn]
     )
 
 

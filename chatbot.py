@@ -6,7 +6,7 @@ import json
 
 # Send onlt this many of the most recent messages to Ollama each turn; anything older is expected to
 # already be folded into the character's memory_summary (by the caller).
-MAX_RECENT_MESSAGES = 16
+MAX_RECENT_MESSAGES = 8
 
 RESPONSE_TEMPERATURE = 0.75
 
@@ -145,7 +145,7 @@ class CharacterChatbot:
         # Query the local Ollama API in STREAMING mode: returns an iterator of small response chunks instead of one full response
         #    -> accumulate and yield the growing reply as each chunk arrives
         partial_reply = ""
-        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE})
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE, "num_predict": 180})
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token
@@ -186,7 +186,7 @@ class CharacterChatbot:
 
         # Same yield
         partial_reply = ""
-        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE})
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE, "num_predict": 180})
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token
