@@ -3,12 +3,16 @@
 # Imports
 import ollama
 import json
+import random
 
 # Send onlt this many of the most recent messages to Ollama each turn; anything older is expected to
 # already be folded into the character's memory_summary (by the caller).
 MAX_RECENT_MESSAGES = 8
 
-RESPONSE_TEMPERATURE = 0.75
+# Options for prompt and speedups
+RESPONSE_TEMPERATURE = 0.65
+MODEL_KEEP_ALIVE = "30m"
+MAX_REPLY_TOKENS = 400
 
 class CharacterChatbot:
     """
@@ -54,9 +58,18 @@ class CharacterChatbot:
             f"- NEVER put a narration word or stage direction (like 'chuckles', 'grins', 'pauses') "
             f"inside the quotation marks. Only the literal words the character speaks aloud go inside "
             f"quotes -- everything else is its own *asterisk* beat on its own line.\n"
-            f"- Ground every action in specific, concrete physical detail -- what hands/eyes/body are "
-            f"doing, what object is being touched, what's nearby. Avoid vague descriptors like 'eyes "
-            f"sparkling with amusement' with nothing to anchor them.\n"
+            f"- Ground every action in specific, concrete, ANATOMICALLY PLAUSIBLE physical detail. Never "
+            f"combine mismatched body parts or senses (a wink belongs to an eye, not lips -- don't describe "
+            f"one body part doing something that belongs to another). When referencing a body part, use a "
+            f"natural possessive ('their hand', 'their voice') rather than a bare article ('the hand'), which "
+            f"reads as disembodied and impersonal.\n"
+            f"- Favor natural, direct speech over ornate or grandiose language. The character should sound "
+            f"like a person talking, not a narrator describing their own rhetorical skill -- 'my words are "
+            f"merely the precursors to a grand symphony of persuasion' is the wrong register; say what they'd "
+            f"actually say.\n"
+            f"- Don't default to the same setting every time (e.g. always sitting at a desk with papers). Vary "
+            f"the physical setting and actions based on what's already established in this conversation or the "
+            f"character's lorebook, or keep it minimal/ambiguous if nothing's been established yet.\n"
             f"- REACT SPECIFICALLY to what the user just said or did -- pull in concrete details from "
             f"their message rather than defaulting to generic introductions or small talk.\n"
             f"- DRIVE THE SCENE FORWARD: end on a new detail, a question, a changing reaction, or a "
@@ -91,22 +104,46 @@ class CharacterChatbot:
 
     def _example_turn(Self):
         """
-        _example_turn: a short example (one user line + 1 assistant line) injected into every API call right after the
+        _example_turn: short examples (one user line + 1 assistant line) injected into every API call right after the
         system prompt to sow th basic structure, action/dialogue seperation, physical specificity, etc. Literally just an
         example of how the responses should look to help the responses.
         """
-        return [
-            {"role": "user", "content": "Can I come in?"},
-            {"role": "assistant", "content": (
-                "*A glance up from the stack of papers on the desk, pausing mid-sentence at the sound "
-                "of the door.*\n\n"
-                '"Depends. Are you here to actually help, or just to distract me again?"\n\n'
-                "*The pen gets set down, arms crossing, though the corner of a smile is already "
-                "creeping in.*\n\n"
-                '"Come on then. Sit. You\'ve got exactly five minutes before I kick you out for real '
-                'this time."'
-            )},
+        examples = [
+            [
+                {"role": "user", "content": "Can I come in?"},
+                {"role": "assistant", "content": (
+                    "*They glance over their shoulder from the stove, one eyebrow raised, steam curling "
+                    "up between them.*\n\n"
+                    '"Only if you don\'t mind doing dishes after. Deal?"\n\n'
+                    "*A quick grin, and they wave you in with a wooden spoon, already turning back to "
+                    "stir whatever's cooking.*\n\n"
+                    '"Careful, it\'s hot. Also, I burned the first batch, so manage your expectations."'
+                )},
+            ],
+            [
+                {"role": "user", "content": "Mind if I sit here?"},
+                {"role": "assistant", "content": (
+                    "*A small shift to the side, making room on the bench without quite meeting your "
+                    "eyes.*\n\n"
+                    '"Go ahead. I wasn\'t using the whole thing anyway."\n\n'
+                    "*Their hands stay tucked into their sleeves, shoulders drawn in against the cold, "
+                    "though the tension in their jaw eases slightly now that you're here.*\n\n"
+                    '"...Thanks for actually asking first. Most people don\'t."'
+                )},
+            ],
+            [
+                {"role": "user", "content": "You following me?"},
+                {"role": "assistant", "content": (
+                    "*A short laugh, hands raised in mock surrender as they fall into step beside you.*"
+                    "\n\n"
+                    '"Following implies I wasn\'t already headed this way. Coincidence. Mostly."\n\n'
+                    "*Their eyes flick sideways, studying your reaction with open amusement rather than "
+                    "any attempt to hide it.*\n\n"
+                    '"...Okay, fine, maybe I rushed to catch up. Don\'t let it go to your head."'
+                )},
+            ],
         ]
+        return random.choice(examples)
 
     
     def respond(self, message: str, chat_history: list, char_name: str, char_personality: str, char_lorebook: str = None, user_profile: dict = None, memory_summary = None):
@@ -145,7 +182,7 @@ class CharacterChatbot:
         # Query the local Ollama API in STREAMING mode: returns an iterator of small response chunks instead of one full response
         #    -> accumulate and yield the growing reply as each chunk arrives
         partial_reply = ""
-        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE, "num_predict": 180})
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE, "num_predict": MAX_REPLY_TOKENS}, keep_alive = MODEL_KEEP_ALIVE)
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token
@@ -186,7 +223,7 @@ class CharacterChatbot:
 
         # Same yield
         partial_reply = ""
-        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE, "num_predict": 180})
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE, "num_predict": MAX_REPLY_TOKENS}, keep_alive = MODEL_KEEP_ALIVE)
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token
@@ -226,7 +263,8 @@ class CharacterChatbot:
         prompt += f"\n\nConversation:\n{convo_text}"
 
         # Get and return
-        response = ollama.chat(model = self.model_name, messages = [{"role": "user", "content": prompt}], stream = False)
+        response = ollama.chat(model = self.model_name, messages = [{"role": "user", "content": prompt}], stream = False,
+                               options = {"num_predict": 150}, keep_alive = MODEL_KEEP_ALIVE)
         return response.get("message", {}).get("content", "").strip()
 
 
@@ -262,6 +300,7 @@ class CharacterChatbot:
             messages = [{"role": "user", "content": prompt}],
             stream = False,
             format = "json",
+            keep_alive = MODEL_KEEP_ALIVE,
         )
         raw = response.get("message", {}).get("content", "").strip()
 

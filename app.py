@@ -55,7 +55,7 @@ db.init_db()
 
 # Arbitrary, but I am gonna make max number of saved characters that the sidebar holds = 10
 #    -> Get rid of the oldest one with FIFO
-MAX_CHARACTERS = 100
+MAX_CHARACTERS = 20
 
 TYPING_INDICATOR_HTML = (
     '<span class="typing-indicator">'
@@ -72,8 +72,8 @@ BAYMAX_LOREBOOK = (
     "Hamada, a robotics prodigy. Baymax is part of a superhero team called "
     "Big Hero 6, alongside Hiro, GoGo Tomago, Wasabi, Honey Lemon, and Fred. "
     "Baymax scans people for injuries and cares for their physical and "
-    "emotional wellbeing, and says 'I am satisfied with my care' when a "
-    "task is complete."
+    "emotional wellbeing, and waits for the user to say 'I am satisfied with my care' when a "
+    "treatment is complete."
 )
 
 # Cancellation flag for avatar gen / greeting streams. Plain dict on purpose, see module docstring above for why this
@@ -299,6 +299,11 @@ with gr.Blocks(title = "Character Studio") as demo:
                         lines = 5,
                         placeholder = "Setting, backstory, other characters, rules the character should stay consistent with.",
                     )
+                    char_custom_greeting = gr.Textbox(
+                        label = "Custom opening line (optional)",
+                        lines = 3,
+                        placeholder = "Write the character's first message yourself to set the scene/tone. Leave this blank to have one generated automatically.",
+                    )
                 form_error = gr.Markdown(visible = False, elem_classes = "field-error")
                 continue_to_avatar_btn = gr.Button("Continue", elem_classes = "btn-primary")
 
@@ -458,7 +463,7 @@ with gr.Blocks(title = "Character Studio") as demo:
             None,  # current_index
             gr.update(visible = False), gr.update(visible = False),
             gr.update(visible = True), gr.update(visible = False),
-            gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False),
+            gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), "",
         )
 
 
@@ -560,9 +565,17 @@ with gr.Blocks(title = "Character Studio") as demo:
 
         # FIRST YIELD: lock the button + every nav button that could pull user away, show the loading caption, and leave the form fields untouched
         yield (
-            gr.update(interactive = False), gr.update(visible = True),
-            gr.update(), gr.update(), gr.update(), gr.update(), gr.update(),
-            gr.update(interactive = False), gr.update(interactive = False), gr.update(interactive = False),
+            gr.update(interactive = False),  # random_char_btn
+            gr.update(visible = True),       # random_char_loading
+            gr.update(),                     # char_name
+            gr.update(),                     # char_personality
+            gr.update(),                     # char_appearance
+            gr.update(),                     # char_lorebook
+            gr.update(),                     # char_custom_greeting
+            gr.update(),                     # form_error
+            gr.update(interactive = False),  # continue_to_avatar_btn
+            gr.update(interactive = False),  # new_char_btn
+            gr.update(interactive = False),  # cancel_from_form_btn
             *[gr.update(interactive = False) for _ in sidebar_name_buttons],
         )
 
@@ -577,8 +590,8 @@ with gr.Blocks(title = "Character Studio") as demo:
         yield (
             gr.update(interactive = True), gr.update(visible = False),
             name, personality, appearance,
-            # char_lorebook is untouched (cleared, edge case for init with Baymax default)
-            char["lorebook"],
+            # char_lorebook and custom greeting are untouched (cleared, edge case for init with Baymax default)
+            char["lorebook"], "",
             # clear any leftover form_error
             gr.update(visible = False),
             gr.update(interactive = True), gr.update(interactive = True), gr.update(interactive = True),
@@ -590,7 +603,7 @@ with gr.Blocks(title = "Character Studio") as demo:
     random_char_btn.click(
         fn = generate_random_character,
         inputs = [],
-        outputs = [random_char_btn, random_char_loading, char_name, char_personality, char_appearance, char_lorebook, form_error,
+        outputs = [random_char_btn, random_char_loading, char_name, char_personality, char_appearance, char_lorebook, char_custom_greeting, form_error,
                    continue_to_avatar_btn, new_char_btn, cancel_from_form_btn, *sidebar_name_buttons],
     )
 
@@ -620,8 +633,25 @@ with gr.Blocks(title = "Character Studio") as demo:
         # Add new character (with timestamp)
         new_char = dict(new_char)
         new_char["last_active"] = time.time()
-        new_char["db_id"] = db.insert_character(new_char)
+        custom_greeting = (new_char.pop("custom_greeting", "") or "").strip()
 
+        # New yield for when the user has provided a greeting
+        if custom_greeting:
+            display_history = [{"role": "assistant", "content": custom_greeting}]
+            new_char["history"] = display_history
+            new_char["db_id"] = db.insert_character(new_char)
+            characters.append(new_char)
+            new_index = len(characters) - 1
+
+            yield (
+                new_char["avatar"], f"**{new_char['name']}**",
+                gr.update(visible = False), gr.update(visible = True),
+                characters, new_index, display_history,
+                *build_sidebar_updates(characters), gr.update(interactive = True),
+            )
+            return
+
+        new_char["db_id"] = db.insert_character(new_char)
         characters.append(new_char)
         new_index = len(characters) - 1
 
@@ -669,7 +699,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         )
 
 
-    def do_generate_avatar(appearance, profile, name, personality, lorebook, characters):
+    def do_generate_avatar(appearance, profile, name, personality, lorebook, custom_greeting, characters):
         """
         do_generate_avatar: Gradio callback for the generate avatar button on the popup screen. Disables bth popup buttons,
         shows a loading message, then runs Stable Diffusion inference before handing off to _finish_character_creation for saving + the streamed greeting.
@@ -710,20 +740,26 @@ with gr.Blocks(title = "Character Studio") as demo:
             _generation_state["cancelled"] = False
             return
 
-        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": img, "history": [], "profile": profile, "memory_summary": "", "summarized_through": 0}
+        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": img, "history": [], "profile": profile, "memory_summary": "", "summarized_through": 0, "custom_greeting": custom_greeting}
 
-        for step in _finish_character_creation(new_char, profile, characters):
-            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
+        gen = _finish_character_creation(new_char, profile, characters)
+        prev_step = None
+        for step in gen:
+            if prev_step is not None:
+                yield (*prev_step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), True, gr.update(visible = True))
+            prev_step = step
+        if prev_step is not None:
+            yield (*prev_step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
 
     # Wire button
     generate_avatar_btn.click(
         fn = do_generate_avatar,
-        inputs = [char_appearance, user_profile_state, char_name, char_personality, char_lorebook, characters_state],
+        inputs = [char_appearance, user_profile_state, char_name, char_personality, char_lorebook, char_custom_greeting, characters_state],
         outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state, sidebar_col],
     )
 
 
-    def skip_avatar(profile, name, personality, appearance, lorebook, characters):
+    def skip_avatar(profile, name, personality, appearance, lorebook, custom_greeting, characters):
         """
         skip_avatar: a Gradio callback for the skip for now button on the popup screen (for the avatar gen). Same as do+generate_avatar,
         but uses a generated placeholder image instead of running Stable Diffusion.
@@ -763,16 +799,22 @@ with gr.Blocks(title = "Character Studio") as demo:
             _generation_state["cancelled"] = False
             return
         
-        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": placeholder, "history": [], "profile": profile, "memory_summary": "", "summarized_through": 0}
+        new_char = {"name": name, "personality": personality, "appearance": appearance, "lorebook": lorebook, "avatar": placeholder, "history": [], "profile": profile, "memory_summary": "", "summarized_through": 0, "custom_greeting": custom_greeting}
 
-        for step in _finish_character_creation(new_char, profile, characters):
-            yield (*step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
+        gen = _finish_character_creation(new_char, profile, characters)
+        prev_step = None
+        for step in gen:
+            if prev_step is not None:
+                yield (*prev_step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), True, gr.update(visible = True))
+            prev_step = step
+        if prev_step is not None:
+            yield (*prev_step, gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), False, gr.update(visible = True))
 
 
     # Wire button
     skip_avatar_btn.click(
         fn = skip_avatar,
-        inputs = [user_profile_state, char_name, char_personality, char_appearance, char_lorebook, characters_state],
+        inputs = [user_profile_state, char_name, char_personality, char_appearance, char_lorebook, char_custom_greeting, characters_state],
         outputs = [avatar_display, chat_header_name, screen_popup, screen_chat, characters_state, current_index, chatbot_ui, *sidebar_output_components, msg_input, generate_avatar_btn, skip_avatar_btn, popup_loading, sd_generating_state, sidebar_col],
     )
 
@@ -804,6 +846,7 @@ with gr.Blocks(title = "Character Studio") as demo:
                 gr.update(),                          # generate_avatar_btn
                 gr.update(),                          # skip_avatar_btn
                 gr.update(),                          # popup_loading
+                gr.update(),                          # char_custom_greeting
 
                 gr.update(),                          # screen_welcome
                 gr.update(),                          # app_row
@@ -827,7 +870,7 @@ with gr.Blocks(title = "Character Studio") as demo:
     new_char_btn.click(
         fn = handle_new_character_click,
         inputs = [sd_generating_state, current_index],
-        outputs = [pending_action_state, screen_leave_confirm, char_name, char_personality, char_appearance, char_lorebook, current_index, screen_chat, screen_popup, screen_form, form_error, generate_avatar_btn, skip_avatar_btn, popup_loading, screen_welcome, app_row, user_profile_state, alias_error, sidebar_col, previous_index_state, cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn],
+        outputs = [pending_action_state, screen_leave_confirm, char_name, char_personality, char_appearance, char_lorebook, current_index, screen_chat, screen_popup, screen_form, form_error, generate_avatar_btn, skip_avatar_btn, popup_loading, char_custom_greeting, screen_welcome, app_row, user_profile_state, alias_error, sidebar_col, previous_index_state, cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn],
     )
 
     # Loop through every character slot in the sidebar and set up a click + delete handler for each one
@@ -911,7 +954,7 @@ with gr.Blocks(title = "Character Studio") as demo:
                 blanks[5], blanks[6], blanks[7], # screen_chat, screen_popup, screen_form
                 gr.update(), gr.update(), gr.update(), # avatar/chatbot/header unchanged
                 blanks[0], blanks[1], blanks[2], blanks[3], # name/personality/appearance/lorebook
-                blanks[9], blanks[10], blanks[11], # gen_btn, skip_btn, loading
+                blanks[9], blanks[10], blanks[11], blanks[12], # gen_btn, skip_btn, loading, char_custom_greeting
             )
         else:
             idx = pending_action
@@ -923,14 +966,16 @@ with gr.Blocks(title = "Character Studio") as demo:
                 loaded[10], loaded[9], loaded[8], # screen_chat, screen_popup, screen_form
                 loaded[1], loaded[2], loaded[3], # avatar, chatbot, header_name
                 loaded[4], loaded[5], loaded[6], loaded[7], # name/personality/appearance/lorebook
-                gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False),
+                gr.update(interactive = True), gr.update(interactive = True), gr.update(visible = False), gr.update()
             )
 
     # Wire button
     confirm_leave_btn.click(
         fn = confirm_leave,
         inputs = [pending_action_state, characters_state],
-        outputs = [screen_leave_confirm, sd_generating_state, current_index, screen_chat, screen_popup, screen_form, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, generate_avatar_btn, skip_avatar_btn, popup_loading],
+        outputs = [screen_leave_confirm, sd_generating_state, current_index, screen_chat, screen_popup, screen_form, avatar_display, 
+                   chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, generate_avatar_btn, 
+                   skip_avatar_btn, popup_loading, char_custom_greeting],
     )
 
     def stay():
@@ -948,7 +993,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         # Get and hide character
         characters = list(characters)
         hide = gr.update(visible = False)
-        no_nav = [gr.update() for _ in range(11)]
+        no_nav = [gr.update() for _ in range(12)]
 
         # No character/out of range character: do nothihng
         if pending_idx is None or pending_idx >= len(characters):
@@ -977,7 +1022,8 @@ with gr.Blocks(title = "Character Studio") as demo:
             if current_idx == pending_idx:
                 if characters:
                     # open the most recently chatted remaining character by default
-                    nav = list(load_character_by_index(len(characters) - 1, characters))
+                    loaded = list(load_character_by_index(len(characters) - 1, characters))
+                    nav = loaded[:8] + [gr.update()] + loaded[8:]
                 else:
                     # nothing left: back to onboarding (default Baymax screen)
                     welcome_u, app_u = gr.update(visible = True), gr.update(visible = False)
@@ -985,7 +1031,7 @@ with gr.Blocks(title = "Character Studio") as demo:
                     nav = [None, gr.update(value = None), [], "", "", "", "", "",
                         gr.update(visible = True), gr.update(visible = False), gr.update(visible = False)]
             elif current_idx > pending_idx:
-                nav = [current_idx - 1] + [gr.update() for _ in range(10)]
+                nav = [current_idx - 1] + [gr.update() for _ in range(11)]
 
         return (hide, characters, previous_idx, welcome_u, app_u, *cancel_u,
                 *build_sidebar_updates(characters), *nav)
@@ -997,7 +1043,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         inputs = [pending_delete_state, characters_state, current_index, previous_index_state],
         outputs = [
             screen_delete_confirm, characters_state, previous_index_state, screen_welcome, app_row, cancel_from_welcome_btn, cancel_from_form_btn, cancel_from_popup_btn,
-            *sidebar_output_components, current_index, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook,
+            *sidebar_output_components, current_index, avatar_display, chatbot_ui, chat_header_name, char_name, char_personality, char_appearance, char_lorebook, char_custom_greeting,
             screen_form, screen_popup, screen_chat,
         ],
     )

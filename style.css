@@ -1,4 +1,28 @@
+/* ============================================================
+   CHARACTER STUDIO — GLOBAL STYLES
+   Custom CSS for the Gradio interface
+   ============================================================ */
+
+
+/* ------------------------------------------------------------
+   IMPORTED FONTS
+   ------------------------------------------------------------
+   Space Grotesk:
+       Used primarily for headings, buttons, and character names.
+
+   IBM Plex Sans:
+       Used primarily for body text, labels, and supporting text.
+   ------------------------------------------------------------ */
+
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap');
+
+
+/* ------------------------------------------------------------
+   GLOBAL GRADIO LAYOUT RESET
+   ------------------------------------------------------------
+   Removes Gradio's default padding, margins, and width limits
+   so that the application can control its own layout.
+   ------------------------------------------------------------ */
 
 .gradio-container, .gradio-container > div, .contain, .app, #root, .main {
     padding: 0 !important;
@@ -18,6 +42,39 @@ html, body {
     margin: 0 !important;
     padding: 0 !important;
 }
+
+
+/* ------------------------------------------------------------
+   APPLICATION THEME / COLOUR VARIABLES
+   ------------------------------------------------------------
+   Defines the main colours used throughout the application.
+
+   --bg:
+       Main white background.
+
+   --panel:
+       Light pink background used for cards and panels.
+
+   --panel-border:
+       Light pink used for borders.
+
+   --accent:
+       Main pink accent colour used for buttons and highlights.
+
+   --accent-soft:
+       Transparent version of the accent colour for subtle
+       hover effects.
+
+   --text:
+       Main dark text colour.
+
+   --text-muted:
+       Lighter text colour for labels and secondary information.
+
+   --error:
+       Red used for validation and destructive actions.
+   ------------------------------------------------------------ */
+
 .gradio-container {
     --bg: #FFFFFF;
     --panel: #FFF3F7;
@@ -37,6 +94,14 @@ html, body {
     min-height: 100vh;
 }
 
+
+/* ------------------------------------------------------------
+   HEADINGS
+   ------------------------------------------------------------
+   Uses Space Grotesk for the main headings and keeps the
+   typography consistent with the application's visual style.
+   ------------------------------------------------------------ */
+
 .gradio-container h1, .gradio-container h2, .gradio-container h3 {
     font-family: 'Space Grotesk', sans-serif;
     font-weight: 600;
@@ -44,9 +109,27 @@ html, body {
     color: var(--text) !important;
 }
 
+
+/* ------------------------------------------------------------
+   STEP INDICATOR
+   ------------------------------------------------------------
+   Styles the small dots used to show which step of the
+   character creation process the user is currently on.
+
+   The active step is wider and uses the accent colour.
+   ------------------------------------------------------------ */
+
 .step-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 0.75rem; }
 .step-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--panel-border); }
 .step-dots span.active { background: var(--accent); width: 18px; border-radius: 3px; }
+
+
+/* ------------------------------------------------------------
+   STANDARD SCREEN / PAGE CONTAINER
+   ------------------------------------------------------------
+   Keeps the character creation screens centered and limits
+   their width so forms do not become excessively wide.
+   ------------------------------------------------------------ */
 
 .screen {
     max-width: 640px;
@@ -54,10 +137,20 @@ html, body {
     padding: 3rem 1.5rem;
     animation: modal-pop-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
+
 .main-content > .screen:not(.chat-screen) {
     margin: 0 auto !important;
     padding: 3rem 1.5rem !important;
 }
+
+
+/* ------------------------------------------------------------
+   STEP CAPTION
+   ------------------------------------------------------------
+   Styles the small descriptive text shown above/below the
+   current step of the application.
+   ------------------------------------------------------------ */
+
 .step-caption {
     font-family: 'IBM Plex Sans', sans-serif;
     font-size: 0.8rem;
@@ -67,7 +160,25 @@ html, body {
     text-align: center !important;
     width: 100%;
 }
+
+
+/* ------------------------------------------------------------
+   WELCOME SCREEN
+   ------------------------------------------------------------
+   Styles the heading and alias input on the initial user
+   profile screen.
+   ------------------------------------------------------------ */
+
 .welcome-heading h2 { font-size: 2rem; line-height: 1.25; margin-bottom: 1.5rem; }
+
+
+/* ------------------------------------------------------------
+   ALIAS INPUT
+   ------------------------------------------------------------
+   Gives the main alias field a minimal underline-only design
+   rather than a traditional input box.
+   ------------------------------------------------------------ */
+
 .alias-input textarea, .alias-input input {
     background: transparent !important;
     border: none !important;
@@ -79,14 +190,32 @@ html, body {
     padding: 0.5rem 0 !important;
     box-shadow: none !important;
 }
+
 .alias-input textarea:focus, .alias-input input:focus { border-bottom-color: var(--accent) !important; }
 
+
+/* ------------------------------------------------------------
+   OPTIONAL USER PROFILE FIELDS
+   ------------------------------------------------------------
+   Styles the additional optional profile inputs such as
+   gender, age, and context.
+   ------------------------------------------------------------ */
+
 .profile-extra label { font-family: 'IBM Plex Sans', sans-serif !important; font-size: 0.85rem !important; color: var(--text-muted) !important; }
+
 .profile-extra textarea, .profile-extra input {
     background: var(--panel) !important;
     border: 1px solid var(--panel-border) !important;
     color: var(--text) !important;
 }
+
+
+/* ------------------------------------------------------------
+   CHARACTER CREATION FORM
+   ------------------------------------------------------------
+   Creates the pink panel containing the character's name,
+   personality, appearance, and other information.
+   ------------------------------------------------------------ */
 
 .form-card {
     background: var(--panel);
@@ -95,8 +224,17 @@ html, body {
     padding: 1.75rem;
     position: relative;
 }
+
 .form-card label { font-family: 'IBM Plex Sans', sans-serif !important; font-size: 0.85rem !important; color: var(--text-muted) !important; }
+
 .form-card textarea, .form-card input { background: var(--bg) !important; border: 1px solid var(--panel-border) !important; color: var(--text) !important; }
+
+
+/* ------------------------------------------------------------
+   POPUP CARD
+   ------------------------------------------------------------
+   Styles smaller centered cards used for popup/loading screens.
+   ------------------------------------------------------------ */
 
 .popup-card {
     background: var(--panel);
@@ -107,7 +245,18 @@ html, body {
     margin: 3rem auto;
     text-align: center;
 }
+
 .popup-loading { margin: 1.5rem 0 !important; }
+
+
+/* ------------------------------------------------------------
+   PRIMARY / SECONDARY BUTTONS
+   ------------------------------------------------------------
+   Primary buttons use the pink accent colour.
+
+   Secondary buttons use a transparent background with a subtle
+   border so that they are visually less prominent.
+   ------------------------------------------------------------ */
 
 .btn-primary, .btn-primary button {
     background: var(--accent) !important;
@@ -116,15 +265,37 @@ html, body {
     font-weight: 600 !important;
     font-family: 'Space Grotesk', sans-serif !important;
 }
+
 .btn-secondary, .btn-secondary button {
     background: transparent !important;
     color: var(--text-muted) !important;
     border: 1px solid var(--panel-border) !important;
 }
+
+
+/* ------------------------------------------------------------
+   FORM VALIDATION ERROR
+   ------------------------------------------------------------
+   Styles error messages shown when required character fields
+   are missing or invalid.
+   ------------------------------------------------------------ */
+
 .field-error { color: var(--error) !important; font-size: 0.9rem; }
+
+
+/* ------------------------------------------------------------
+   MAIN APPLICATION LAYOUT
+   ------------------------------------------------------------
+   Creates a full-height two-pane layout:
+       - Sidebar on the left
+       - Main application area on the right
+
+   The page itself does not scroll horizontally.
+   ------------------------------------------------------------ */
 
 /* App layout: full-height sidebar + full-height main content, no centered
    max-width wrapper for the overall page. */
+
 .app-row {
     height: 100vh;
     min-height: 0;
@@ -133,6 +304,16 @@ html, body {
     align-items: stretch !important;
     gap: 0 !important;
 }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR
+   ------------------------------------------------------------
+   The sidebar occupies the full height of the application.
+
+   The outer sidebar itself does not scroll. Its character list
+   has its own independent scrolling area below.
+   ------------------------------------------------------------ */
 
 .sidebar {
     display: flex;
@@ -144,16 +325,42 @@ html, body {
     background: var(--panel);
     border-right: 1px solid var(--panel-border);
 }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR "NEW CHARACTER" BUTTON
+   ------------------------------------------------------------
+   Keeps the button fixed at the top of the sidebar instead of
+   allowing it to shrink with the character list.
+   ------------------------------------------------------------ */
+
 .sidebar-new-btn {
     flex: 0 0 auto;
     margin: 1rem 1rem 0.5rem 1rem;
     width: calc(100% - 2rem);
     background: var(--accent) !important;
 }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR HEADER
+   ------------------------------------------------------------
+   Keeps the sidebar heading fixed above the scrolling
+   character list.
+   ------------------------------------------------------------ */
+
 .sidebar-header {
     flex: 0 0 auto;
     background: var(--panel);
 }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR CHARACTER LIST
+   ------------------------------------------------------------
+   Allows the character list to scroll independently when there
+   are more saved characters than can fit vertically.
+   ------------------------------------------------------------ */
 
 .sidebar-list {                        /* ...the list does */
     flex: 1 1 0;
@@ -161,14 +368,32 @@ html, body {
     overflow-y: auto !important;
     overflow-x: hidden !important;
 }
+
+
+/* Prevents individual character rows from shrinking when the
+   sidebar contains many characters. */
+
 .sidebar-list > * { flex-shrink: 0 !important; }   /* rows keep their height and overflow instead of squishing */
 
-.main-content {
-    height: 100vh;
-    min-height: 0;
-    overflow-y: auto;                  /* main pane scrolls independently */
-}
+
+/* ------------------------------------------------------------
+   SIDEBAR NEW CHARACTER BUTTON — GRADIO OVERRIDE
+   ------------------------------------------------------------
+   Ensures both the Gradio wrapper and its actual button receive
+   the intended spacing and width.
+   ------------------------------------------------------------ */
+
 .sidebar-new-btn, .sidebar-new-btn button { margin: 1rem 1rem 0.5rem 1rem; width: calc(100% - 2rem); }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR CHARACTER ROW
+   ------------------------------------------------------------
+   Each saved character is displayed as a row containing:
+       1. Avatar
+       2. Character name
+       3. Delete button
+   ------------------------------------------------------------ */
 
 .sidebar-row {
     display: flex !important;
@@ -181,25 +406,62 @@ html, body {
     box-sizing: border-box !important;
 }
 
+
+/* ------------------------------------------------------------
+   SIDEBAR AVATAR COLUMN
+   ------------------------------------------------------------
+   Gives the avatar a fixed 40px-wide column so that all
+   character rows line up consistently.
+   ------------------------------------------------------------ */
+
 /* Keep the avatar column fixed and let the name column take the remaining space. */
+
 .sidebar-row > .gr-column:first-child {
     flex: 0 0 40px !important;
     width: 40px !important;
     min-width: 40px !important;
 }
 
+
+/* ------------------------------------------------------------
+   SIDEBAR CHARACTER NAME COLUMN
+   ------------------------------------------------------------
+   Allows the name to use all remaining horizontal space
+   between the avatar and delete button.
+   ------------------------------------------------------------ */
+
 .sidebar-row > .gr-column:nth-child(2) {
     flex: 1 1 auto !important;
     width: auto !important;
     min-width: 0 !important;
 }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR DELETE BUTTON COLUMN
+   ------------------------------------------------------------
+   Reserves a fixed 32px-wide space for the delete button.
+   ------------------------------------------------------------ */
+
 .sidebar-row > .gr-column:nth-child(3) {
     flex: 0 0 32px !important;
     width: 32px !important;
     min-width: 32px !important;
 }
 
+
+/* ------------------------------------------------------------
+   SIDEBAR DELETE BUTTON
+   ------------------------------------------------------------
+   The delete/bin button is normally hidden and appears when
+   the user hovers over the character row.
+
+   On touch devices, where hover is unavailable, the button is
+   always visible instead.
+   ------------------------------------------------------------ */
+
 /* Bin: hidden until the row is hovered */
+
 .sidebar-delete-btn, .sidebar-delete-btn button {
     background: none !important;
     border: none !important;
@@ -209,26 +471,41 @@ html, body {
     min-width: 32px !important;
     height: 32px !important;
 }
+
 .sidebar-delete-btn {
     opacity: 0;
     pointer-events: none;      /* invisible bin can't be clicked by accident */
     transition: opacity 0.12s ease;
 }
+
 .sidebar-row:hover .sidebar-delete-btn,
 .sidebar-delete-btn:focus-within {
     opacity: 1;
     pointer-events: auto;
 }
+
 .sidebar-delete-btn button:hover {
     background: var(--accent-soft) !important;
     border-radius: 50%;
 }
-/* Touch screens have no hover, so always show it there */
+
+
+/* Touch screens have no hover, so always show the delete button. */
+
 @media (hover: none) {
     .sidebar-delete-btn { opacity: 1; pointer-events: auto; }
 }
 
+
+/* ------------------------------------------------------------
+   DANGER / DELETE BUTTON
+   ------------------------------------------------------------
+   Uses the error colour to visually indicate destructive
+   actions such as deleting a character.
+   ------------------------------------------------------------ */
+
 /* Red confirm button */
+
 .btn-danger, .btn-danger button {
     background: var(--error) !important;
     color: #FFFFFF !important;
@@ -236,6 +513,17 @@ html, body {
     font-weight: 600 !important;
     font-family: 'Space Grotesk', sans-serif !important;
 }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR AVATARS
+   ------------------------------------------------------------
+   Forces character avatars into circular 40px containers and
+   crops images to fit without stretching.
+
+   Gradio's fullscreen/download controls are hidden because
+   avatars are intended to function as small UI elements.
+   ------------------------------------------------------------ */
 
 .sidebar-avatar {
     position: relative !important;
@@ -245,6 +533,7 @@ html, body {
     overflow: hidden !important;
     border-radius: 50%;
 }
+
 .sidebar-avatar img {
     position: absolute !important;
     top: 0 !important;
@@ -256,9 +545,18 @@ html, body {
     object-fit: cover !important;
     object-position: center !important;
 }
+
 .sidebar-avatar .icon-buttons,
 .sidebar-avatar button[aria-label="Fullscreen"],
 .sidebar-avatar button[aria-label="Download"] { display: none !important; }
+
+
+/* ------------------------------------------------------------
+   CHAT HEADER AVATAR
+   ------------------------------------------------------------
+   Similar to the sidebar avatar, but slightly larger for the
+   character currently being chatted with.
+   ------------------------------------------------------------ */
 
 .chat-header-avatar {
     position: relative !important;
@@ -268,6 +566,7 @@ html, body {
     overflow: hidden !important;
     border-radius: 50%;
 }
+
 .chat-header-avatar img {
     position: absolute !important;
     top: 0 !important;
@@ -279,9 +578,21 @@ html, body {
     object-fit: cover !important;
     object-position: center !important;
 }
+
 .chat-header-avatar .icon-buttons,
 .chat-header-avatar button[aria-label="Fullscreen"],
 .chat-header-avatar button[aria-label="Download"] { display: none !important; }
+
+
+/* ------------------------------------------------------------
+   SIDEBAR CHARACTER NAME BUTTON
+   ------------------------------------------------------------
+   Makes the character name look like plain text rather than
+   a traditional Gradio button.
+
+   Long names are truncated with an ellipsis rather than
+   overflowing the sidebar.
+   ------------------------------------------------------------ */
 
 .sidebar-name-btn, .sidebar-name-btn button {
     background: none !important;
@@ -298,8 +609,17 @@ html, body {
     text-overflow: ellipsis;
 }
 
+
+/* ------------------------------------------------------------
+   CHAT SCREEN
+   ------------------------------------------------------------
+   Unlike the character creation screens, the chat interface
+   should use the entire available width and height.
+   ------------------------------------------------------------ */
+
 /* Chat screen: fills all remaining space rather than being capped at the
    640px "screen" width used by the other steps. */
+
 .chat-screen {
     max-width: none !important;
     margin: 0 !important;
@@ -309,13 +629,32 @@ html, body {
     flex: 1;
     min-height: 100vh;
 }
+
+
+/* ------------------------------------------------------------
+   CHAT HEADER
+   ------------------------------------------------------------
+   Places the character avatar, character name, and details
+   button in a compact horizontal header.
+   ------------------------------------------------------------ */
+
 .chat-header {
     align-items: center;
     gap: 0.75rem;
     padding: 0.75rem 1rem;
     border-bottom: 1px solid var(--panel-border);
 }
+
 .chat-header-name { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 1.15rem; }
+
+
+/* ------------------------------------------------------------
+   CHARACTER DETAILS BUTTON
+   ------------------------------------------------------------
+   Creates a small circular button for opening character
+   information/details.
+   ------------------------------------------------------------ */
+
 .details-btn, .details-btn button {
     background: none !important;
     border: 1px solid var(--panel-border) !important;
@@ -326,20 +665,59 @@ html, body {
     height: 32px !important;
     padding: 0 !important;
 }
+
+
+/* ------------------------------------------------------------
+   CHAT WINDOW
+   ------------------------------------------------------------
+   Allows the actual conversation area to expand and occupy
+   the available vertical space.
+   ------------------------------------------------------------ */
+
 .chat-window { flex: 1; }
 
+
+/* ------------------------------------------------------------
+   TYPING INDICATOR
+   ------------------------------------------------------------
+   Creates the three animated dots shown while the character
+   is generating a response.
+   ------------------------------------------------------------ */
+
 .typing-indicator { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+
 .typing-indicator .dot {
     width: 6px; height: 6px; border-radius: 50%;
     background: var(--text-muted);
     animation: bounce 1.2s infinite ease-in-out;
 }
+
 .typing-indicator .dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-indicator .dot:nth-child(3) { animation-delay: 0.3s; }
+
+
+/* ------------------------------------------------------------
+   TYPING DOT ANIMATION
+   ------------------------------------------------------------
+   Moves each dot upward briefly and changes its opacity to
+   create a bouncing/loading animation.
+   ------------------------------------------------------------ */
+
 @keyframes bounce {
     0%, 80%, 100% { transform: translateY(0); opacity: .4; }
     40% { transform: translateY(-5px); opacity: 1; }
 }
+
+
+/* ------------------------------------------------------------
+   MODAL OVERLAY
+   ------------------------------------------------------------
+   Covers the application with a semi-transparent dark layer
+   when a popup/modal is displayed.
+
+   The backdrop blur slightly separates the popup from the
+   content underneath it.
+   ------------------------------------------------------------ */
 
 .modal-overlay {
     position: fixed !important;
@@ -352,10 +730,30 @@ html, body {
     z-index: 1000;
     animation: overlay-fade-in 0.15s ease-out;
 }
+
+
+/* ------------------------------------------------------------
+   MODAL FADE-IN ANIMATION
+   ------------------------------------------------------------
+   Fades the modal overlay from transparent to fully visible.
+   ------------------------------------------------------------ */
+
 @keyframes overlay-fade-in {
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+
+/* ------------------------------------------------------------
+   MODAL CARD
+   ------------------------------------------------------------
+   Styles the actual popup content displayed above the
+   background overlay.
+
+   The card has a maximum height and can scroll internally if
+   its contents are too large for the screen.
+   ------------------------------------------------------------ */
+
 .modal-card {
     position: relative;
     background: var(--bg);
@@ -369,12 +767,30 @@ html, body {
     box-shadow: 0 20px 60px rgba(226, 63, 132, 0.18), 0 6px 20px rgba(43, 20, 32, 0.10);
     animation: modal-pop-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
+
+
+/* ------------------------------------------------------------
+   MODAL POP-IN ANIMATION
+   ------------------------------------------------------------
+   Gives screens and modal cards a small upward/scale animation
+   when they appear.
+   ------------------------------------------------------------ */
+
 @keyframes modal-pop-in {
     from { opacity: 0; transform: translateY(8px) scale(0.97); }
     to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+
+/* ------------------------------------------------------------
+   CHARACTER DETAILS AVATAR
+   ------------------------------------------------------------
+   Displays a larger version of the character avatar at the
+   top of the character-details popup.
+   ------------------------------------------------------------ */
+
 /* Avatar shown at the top of the character-details popup */
+
 .modal-avatar {
     position: relative !important;
     width: 140px !important;
@@ -386,6 +802,7 @@ html, body {
     box-shadow: 0 0 0 1px var(--panel-border);
     background: var(--panel);
 }
+
 .modal-avatar img {
     position: absolute !important;
     top: 0 !important;
@@ -397,12 +814,23 @@ html, body {
     object-fit: cover !important;
     object-position: center 20% !important;
 }
+
 .modal-avatar .icon-buttons,
 .modal-avatar button[aria-label="Fullscreen"],
 .modal-avatar button[aria-label="Download"] { display: none !important; }
 
+
+/* ------------------------------------------------------------
+   MODAL TEXT CONTENT
+   ------------------------------------------------------------
+   Controls the layout and typography of text inside popup
+   dialogs such as character details.
+   ------------------------------------------------------------ */
+
 /* Text content inside the popups */
+
 .modal-body { text-align: left; }
+
 .modal-body h2 {
     text-align: center;
     font-size: 1.4rem;
@@ -410,6 +838,7 @@ html, body {
     padding-bottom: 0.9rem;
     border-bottom: 1px solid var(--panel-border);
 }
+
 .modal-body h3 {
     font-family: 'IBM Plex Sans', sans-serif !important;
     font-size: 0.75rem !important;
@@ -419,21 +848,34 @@ html, body {
     color: var(--accent) !important;
     margin: 1.1rem 0 0.35rem 0 !important;
 }
+
 .modal-body h3:first-of-type { margin-top: 0 !important; }
+
 .modal-body p {
     margin: 0 0 0.75rem 0;
     line-height: 1.5;
     color: var(--text);
 }
+
 .modal-body em {
     color: var(--text-muted);
 }
+
 .modal-body { 
     text-align: left; 
     padding: 0 0.15rem; /* small extra horizontal cushion beyond the card's own padding */
 }
 
+
+/* ------------------------------------------------------------
+   MODAL CLOSE BUTTON
+   ------------------------------------------------------------
+   Makes the close button a small pill-shaped button aligned
+   to the right instead of a full-width default Gradio button.
+   ------------------------------------------------------------ */
+
 /* Close button: small pill, right-aligned instead of full-width default */
+
 .modal-close-btn, .modal-close-btn button {
     display: block;
     margin: 1.5rem 0.25rem 0.25rem auto !important;
@@ -443,15 +885,33 @@ html, body {
     font-size: 0.85rem !important;
 }
 
+
+/* ------------------------------------------------------------
+   APPLICATION ROW RESET
+   ------------------------------------------------------------
+   Reinforces the zero-gap layout for the main application
+   row and its direct children.
+   ------------------------------------------------------------ */
+
 .app-row {
     gap: 0 !important;
     padding: 0 !important;
 }
+
 .app-row > * {
     margin: 0 !important;
 }
 
+
+/* ------------------------------------------------------------
+   SIDEBAR HEADER LABEL
+   ------------------------------------------------------------
+   Styles the text label appearing above the saved character
+   list.
+   ------------------------------------------------------------ */
+
 /* Sidebar header label, above the character list */
+
 .sidebar-header {
     padding: 0.5rem 1rem 0.75rem 1rem;
     font-family: 'Space Grotesk', sans-serif;
@@ -462,7 +922,22 @@ html, body {
     margin-bottom: 0.5rem;
 }
 
+
+/* ------------------------------------------------------------
+   CHAT BUBBLES
+   ------------------------------------------------------------
+   Gives user and character messages different backgrounds
+   and rounded-corner shapes.
+
+   User messages:
+       Pink accent background.
+
+   Character messages:
+       Light pink panel background.
+   ------------------------------------------------------------ */
+
 /* Chat bubbles: differentiate user vs character, iMessage/WhatsApp style. */
+
 .chat-window [data-testid*="user"],
 .chat-window .message.user,
 .chat-window .user-row .message {
@@ -470,6 +945,7 @@ html, body {
     color: #FFFFFF !important;
     border-radius: 18px 18px 4px 18px !important;
 }
+
 .chat-window [data-testid*="bot"],
 .chat-window .message.bot,
 .chat-window .bot-row .message {
@@ -478,18 +954,39 @@ html, body {
     border-radius: 18px 18px 18px 4px !important;
 }
 
+
+/* ------------------------------------------------------------
+   CHAT MESSAGE INPUT
+   ------------------------------------------------------------
+   Creates the bottom input area.
+
+   The text field is pill-shaped and the send button is
+   circular to resemble a modern messaging application.
+   ------------------------------------------------------------ */
+
 /* Pill-shaped message input bar with a round send button */
+
 .msg-row {
     align-items: center;
     gap: 0.5rem;
     padding: 0.75rem 1rem;
     border-top: 1px solid var(--panel-border);
 }
+
 .msg-input textarea, .msg-input input {
     border-radius: 999px !important;
     border: 1px solid var(--panel-border) !important;
     padding: 0.6rem 1rem !important;
 }
+
+
+/* ------------------------------------------------------------
+   SEND BUTTON
+   ------------------------------------------------------------
+   Creates the circular pink button used to submit chat
+   messages.
+   ------------------------------------------------------------ */
+
 .send-btn, .send-btn button {
     border-radius: 50% !important;
     width: 40px !important;
@@ -500,6 +997,16 @@ html, body {
     color: #FFFFFF !important;
     border: none !important;
 }
+
+
+/* ------------------------------------------------------------
+   BACK BUTTON
+   ------------------------------------------------------------
+   Styles navigation buttons that return the user to a
+   previous screen. The button is intentionally subtle so it
+   does not compete with the main action.
+   ------------------------------------------------------------ */
+
 .back-btn, .back-btn button {
     background: none !important;
     border: none !important;
