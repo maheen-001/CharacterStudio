@@ -44,10 +44,15 @@ html, body {
     color: var(--text) !important;
 }
 
+.step-dots { display: flex; gap: 6px; justify-content: center; margin-bottom: 0.75rem; }
+.step-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--panel-border); }
+.step-dots span.active { background: var(--accent); width: 18px; border-radius: 3px; }
+
 .screen {
     max-width: 640px;
     margin: 0 auto;
     padding: 3rem 1.5rem;
+    animation: modal-pop-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 .main-content > .screen:not(.chat-screen) {
     margin: 0 auto !important;
@@ -427,7 +432,6 @@ html, body {
     color: #FFFFFF !important;
     border: none !important;
 }
-
 .back-btn, .back-btn button {
     background: none !important;
     border: none !important;

@@ -26,10 +26,14 @@ import gradio as gr
 from PIL import Image, ImageDraw, ImageFont
 from image_gen import AvatarGenerator
 from chatbot import CharacterChatbot, MAX_RECENT_MESSAGES
+import sqlite3, db
 
 # Initialize models
 avatar_gen = AvatarGenerator()
 bot = CharacterChatbot(model_name = "llama3:8b")
+
+# Initialize db
+db.init_db()
 
 # Arbitrary, but I am gonna make max number of saved characters that the sidebar holds = 10
 #    -> Get rid of the oldest one with FIFO
@@ -158,6 +162,16 @@ def _load_css(filename: str = "style.css") -> str:
 
 # Set up the css
 CUSTOM_CSS = _load_css()
+def step_dots(active_step: int, total: int = 4) -> str:
+    """
+    step_dots: builds the HTML for the small step progress indicator shown on the welcome,
+    character form, and avatar popup screens.
+    """
+    dots = "".join(
+        f'<span class="{"active" if i == active_step else ""}"></span>'
+        for i in range(1, total + 1)
+    )
+    return f'<div class="step-dots">{dots}</div>'
 
 
 with gr.Blocks(title = "Character Studio") as demo:
@@ -181,7 +195,7 @@ with gr.Blocks(title = "Character Studio") as demo:
 
     # SCREEN 1: profile entry
     with gr.Column(visible = True, elem_classes = "screen") as screen_welcome:
-        gr.Markdown("Step 1 of 4", elem_classes = "step-caption")
+        gr.HTML(step_dots(1))
         cancel_from_welcome_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
         gr.Markdown(
             "## What should we call you here?\nPick any name, it's just for this chat!",
@@ -234,7 +248,7 @@ with gr.Blocks(title = "Character Studio") as demo:
 
             # SCREEN 2: character creation form
             with gr.Column(visible = True, elem_classes = "screen") as screen_form:
-                gr.Markdown("Step 2 of 4", elem_classes = "step-caption")
+                gr.HTML(step_dots(2))
 
                 # back button
                 cancel_from_form_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
@@ -268,7 +282,7 @@ with gr.Blocks(title = "Character Studio") as demo:
 
             # SCREEN 3: avatar decision "popup" for generating the image
             with gr.Column(visible = False, elem_classes = "screen") as screen_popup:
-                gr.Markdown("Step 3 of 4", elem_classes = "step-caption")
+                gr.HTML(step_dots(3))
                 cancel_from_popup_btn = gr.Button("← Back to chat", elem_classes = "btn-secondary back-btn", visible = False)
                 with gr.Group(elem_classes = "popup-card"):
                     gr.Markdown("### Generate an avatar?")
@@ -517,8 +531,8 @@ with gr.Blocks(title = "Character Studio") as demo:
         yield (
             gr.update(interactive = True), gr.update(visible = False),
             name, personality, appearance,
-            # char_lorebook is untouched
-            gr.update(),
+            # char_lorebook is untouched (cleared, edge case for init with Baymax default)
+            char["lorebook"],
             # clear any leftover form_error
             gr.update(visible = False),
             gr.update(interactive = True), gr.update(interactive = True), gr.update(interactive = True),

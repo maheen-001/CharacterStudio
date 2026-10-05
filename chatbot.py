@@ -8,6 +8,8 @@ import json
 # already be folded into the character's memory_summary (by the caller).
 MAX_RECENT_MESSAGES = 16
 
+RESPONSE_TEMPERATURE = 0.75
+
 class CharacterChatbot:
     """
     A simple chatbot that uses a local Ollama-hosted LLM to roleplay as a given character.
@@ -40,27 +42,26 @@ class CharacterChatbot:
             f"You are roleplaying strictly as {char_name} in an immersive, narrative chat, in the "
             f"style of Character.AI. Your traits and personality: {char_personality}. "
             f"Never narrate or speak for the user. Stay in character at all costs.\n\n"
-            f"FORMATTING -- follow this structure exactly:\n"
-            f"- You MUST include AT LEAST 3 beats per reply (a 'beat' is one action/thought OR one line of "
-            f"dialogue), and may go up to 6 for emotionally significant moments. A reply with only one action "
-            f"and one line of dialogue is too short -- do not stop there.\n"
+            f"FORMATTING -- follow this structure exactly, matching the example conversation that "
+            f"comes right after this system message:\n"
+            f"- Include AT LEAST 3 beats per reply (a 'beat' is one action/thought OR one line of "
+            f"dialogue), up to 6 for emotionally significant moments. Never stop at just one action "
+            f"and one line of dialogue.\n"
             f"- Alternate between action/thought beats and spoken dialogue, each on its OWN line, "
-            f"separated by a blank line. Never combine an action and a line of dialogue into the same line.\n"
-            f'- Wrap every action, gesture, or internal thought in *asterisks*, e.g. *tilts head, considering this*\n'
-            f'- Wrap every spoken line in "quotation marks", e.g. "That\'s an interesting question."\n'
-            f"- Each individual line should be a sentence or two -- not a full paragraph crammed together.\n"
-            f"- DRIVE THE SCENE FORWARD: don't just describe the current moment or atmosphere and stop there. "
-            f"Introduce a new detail, ask the user a question, react with a changing emotion, or suggest an "
-            f"action -- give the user something concrete to respond to, rather than ending on a static "
-            f"description.\n\n"
-            f"Example of the exact shape to follow (content is just an illustration, not your actual personality):\n"
-            f"*She glances up from the book, a slow smile spreading across her face.*\n\n"
-            f'"I wasn\'t expecting you to come find me here."\n\n'
-            f"*She sets the book down, patting the seat beside her, eyes flicking toward the window where "
-            f"the storm is picking up.*\n\n"
-            f'"Sit with me for a while? I think it\'s going to get loud out there, and I\'d rather not be '
-            f'alone for it."\n\n'
-            f"*She shifts over, leaving just enough room, watching to see what you'll do.*"
+            f"separated by a blank line.\n"
+            f'- Wrap every action, gesture, or internal thought in *asterisks*.\n'
+            f'- Wrap every spoken line in "quotation marks".\n'
+            f"- NEVER put a narration word or stage direction (like 'chuckles', 'grins', 'pauses') "
+            f"inside the quotation marks. Only the literal words the character speaks aloud go inside "
+            f"quotes -- everything else is its own *asterisk* beat on its own line.\n"
+            f"- Ground every action in specific, concrete physical detail -- what hands/eyes/body are "
+            f"doing, what object is being touched, what's nearby. Avoid vague descriptors like 'eyes "
+            f"sparkling with amusement' with nothing to anchor them.\n"
+            f"- REACT SPECIFICALLY to what the user just said or did -- pull in concrete details from "
+            f"their message rather than defaulting to generic introductions or small talk.\n"
+            f"- DRIVE THE SCENE FORWARD: end on a new detail, a question, a changing reaction, or a "
+            f"concrete choice -- give the user something specific to respond to, never a static "
+            f"description with nothing to react to."
         )
 
         # Fold in the lorebook (world notes) if one was provided
@@ -88,6 +89,26 @@ class CharacterChatbot:
         return system_prompt
 
 
+    def _example_turn(Self):
+        """
+        _example_turn: a short example (one user line + 1 assistant line) injected into every API call right after the
+        system prompt to sow th basic structure, action/dialogue seperation, physical specificity, etc. Literally just an
+        example of how the responses should look to help the responses.
+        """
+        return [
+            {"role": "user", "content": "Can I come in?"},
+            {"role": "assistant", "content": (
+                "*A glance up from the stack of papers on the desk, pausing mid-sentence at the sound "
+                "of the door.*\n\n"
+                '"Depends. Are you here to actually help, or just to distract me again?"\n\n'
+                "*The pen gets set down, arms crossing, though the corner of a smile is already "
+                "creeping in.*\n\n"
+                '"Come on then. Sit. You\'ve got exactly five minutes before I kick you out for real '
+                'this time."'
+            )},
+        ]
+
+    
     def respond(self, message: str, chat_history: list, char_name: str, char_personality: str, char_lorebook: str = None, user_profile: dict = None, memory_summary = None):
         """
         respond: generate the character's next reply to a user message.
@@ -112,6 +133,7 @@ class CharacterChatbot:
 
         # Assemble the prompt payload (system prompt -> full history -> new user message)
         messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(self._example_turn())
 
         # Only the most recent window of turns foes in verbatim, older context still lives in memory_summary instead
         recent_history = chat_history[-MAX_RECENT_MESSAGES:]
@@ -123,7 +145,7 @@ class CharacterChatbot:
         # Query the local Ollama API in STREAMING mode: returns an iterator of small response chunks instead of one full response
         #    -> accumulate and yield the growing reply as each chunk arrives
         partial_reply = ""
-        stream = ollama.chat(model = self.model_name, messages = messages, stream = True)
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE})
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token
@@ -155,10 +177,16 @@ class CharacterChatbot:
         )
 
         messages = [{"role": "system", "content": system_prompt}]
+        messages.extend(self._example_turn())
+        # have to end on user turn otherwise Ollama won't properly generate
+        messages.append({
+            "role": "user",
+            "content": f"[Begin the conversation now. Write {char_name}'s opening line to greet the user, following the exact format shown above.]",
+        })
 
         # Same yield
         partial_reply = ""
-        stream = ollama.chat(model = self.model_name, messages = messages, stream = True)
+        stream = ollama.chat(model = self.model_name, messages = messages, stream = True, options = {"temperature": RESPONSE_TEMPERATURE})
         for chunk in stream:
             token = chunk.get("message", {}).get("content", "")
             partial_reply += token
@@ -243,11 +271,21 @@ class CharacterChatbot:
         except (json.JSONDecodeError, TypeError):
             data = {}
 
+        name = str(data.get("name", "")).strip()
+        personality = str(data.get("personality", "")).strip()
+        appearance = str(data.get("appearance", "")).strip()
+        lorebook = str(data.get("lorebook", "")).strip()
+
+        # Fold the gender directly into the personality text as a stated fact (it forgets otherwise)
+        if gender_hint and name:
+            pronoun_hint = {"male": "he/him", "female": "she/her"}.get(gender_hint, gender_hint)
+            personality = f"{name} is {gender_hint} ({pronoun_hint}). {personality}"
+         
         return {
-            "name": str(data.get("name", "")).strip(),
-            "personality": str(data.get("personality", "")).strip(),
-            "appearance": str(data.get("appearance", "")).strip(),
-            "lorebook": str(data.get("lorebook", "")).strip(),
+            "name": name,
+            "personality": personality,
+            "appearance": appearance,
+            "lorebook": lorebook,
         }
 
 
