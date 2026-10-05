@@ -133,16 +133,28 @@ html, body {
 
 .screen {
     max-width: 640px;
+    width: 100%;
+    box-sizing: border-box;
     margin: 0 auto;
     padding: 3rem 1.5rem;
     animation: modal-pop-in 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
+.main-content {
+    height: 100vh;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
 .main-content > .screen:not(.chat-screen) {
     margin: 0 auto !important;
     padding: 3rem 1.5rem !important;
+    box-sizing: border-box !important;
+    max-width: 640px !important;
+    width: 100% !important;
 }
-
 
 /* ------------------------------------------------------------
    STEP CAPTION
