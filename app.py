@@ -26,7 +26,7 @@ import gradio as gr
 from PIL import Image, ImageDraw, ImageFont
 from image_gen import AvatarGenerator
 from chatbot import CharacterChatbot, MAX_RECENT_MESSAGES
-import sqlite3, db
+import db
 
 # Initialize models
 avatar_gen = AvatarGenerator()
@@ -37,7 +37,7 @@ db.init_db()
 
 # Arbitrary, but I am gonna make max number of saved characters that the sidebar holds = 10
 #    -> Get rid of the oldest one with FIFO
-MAX_CHARACTERS = 10
+MAX_CHARACTERS = 100
 
 TYPING_INDICATOR_HTML = (
     '<span class="typing-indicator">'
@@ -223,17 +223,18 @@ with gr.Blocks(title = "Character Studio") as demo:
             new_char_btn = gr.Button("+ New Character", elem_classes = "btn-primary sidebar-new-btn")
             gr.Markdown("Chats", elem_classes = "sidebar-header")
 
-            sidebar_rows = []
-            for _slot in range(MAX_CHARACTERS):
-                with gr.Row(visible = False, elem_classes = "sidebar-row") as _row:
-                    with gr.Column(scale = 0, min_width = 40):
-                        _avatar = gr.Image(
-                            show_label = False, container = False, interactive = False,
-                            elem_classes = "sidebar-avatar",
-                        )
-                    with gr.Column(scale = 1, min_width = 0):
-                        _name_btn = gr.Button("", elem_classes = "sidebar-name-btn")
-                sidebar_rows.append({"row": _row, "avatar": _avatar, "name_btn": _name_btn})
+            with gr.Column(elem_classes = "sidebar-list"):
+                sidebar_rows = []
+                for _slot in range(MAX_CHARACTERS):
+                    with gr.Row(visible = False, elem_classes = "sidebar-row") as _row:
+                        with gr.Column(scale = 0, min_width = 40):
+                            _avatar = gr.Image(
+                                show_label = False, container = False, interactive = False,
+                                elem_classes = "sidebar-avatar",
+                            )
+                        with gr.Column(scale = 1, min_width = 0):
+                            _name_btn = gr.Button("", elem_classes = "sidebar-name-btn")
+                    sidebar_rows.append({"row": _row, "avatar": _avatar, "name_btn": _name_btn})
 
             # Flattened list of every sidebar component in a fixed order, used whenever a callback needs to refresh the whole sidebar at once.
             sidebar_output_components = []
@@ -364,9 +365,11 @@ with gr.Blocks(title = "Character Studio") as demo:
         """
 
         updates = []
+        n = len(characters)
         for i in range(MAX_CHARACTERS):
-            if i < len(characters):
-                c = characters[i]
+            if i < n:
+                # Newest characters first
+                c = characters[n - 1 - i]
                 updates += [gr.update(visible = True), gr.update(value = c["avatar"]), gr.update(value = c["name"])]
             else:
                 updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "")]
@@ -566,9 +569,15 @@ with gr.Blocks(title = "Character Studio") as demo:
 
         characters = list(characters)
         if len(characters) >= MAX_CHARACTERS:
-            # evict oldest if needed
-            characters.pop(0)
+            # evict oldest if needed (both in memory and in the db)
+            evicted = characters.pop(0)
+            if evicted.get("db_id") is not None:
+                db.delete_character(evicted["db_id"])
+
         # Add new character
+        new_char = dict(new_char)
+        new_char["db_id"] = db.insert_character(new_char)
+
         characters.append(new_char)
         new_index = len(characters) - 1
 
@@ -604,6 +613,10 @@ with gr.Blocks(title = "Character Studio") as demo:
         new_char = dict(new_char)
         new_char["history"] = display_history
         characters[new_index] = new_char
+
+        # Persist the finished greeting
+        db.update_character(new_char["db_id"], new_char)
+
         yield (
             gr.update(), gr.update(),
             gr.update(), gr.update(),
@@ -780,14 +793,19 @@ with gr.Blocks(title = "Character Studio") as demo:
             handle_sidebar_click: same generation gate pattern as handle_new_character_click, but for switching to an existing
             saved character instead of starting a blank one.
             """
+            # slot 0 = newest character, so convert the slot to a real index
+            real_index = len(characters) - 1 - slot_index
+            if real_index < 0:
+                return (None, gr.update(visible = False), *[gr.update() for _ in range(11)])
+    
             if generating:
                 return (
-                    slot_index, gr.update(visible = True),
+                    real_index, gr.update(visible = True),
                     gr.update(), gr.update(), gr.update(), gr.update(),
                     gr.update(), gr.update(), gr.update(), gr.update(),
                     gr.update(), gr.update(), gr.update(),
                 )
-            loaded = load_character_by_index(slot_index, characters)
+            loaded = load_character_by_index(real_index, characters)
             # loaded = (idx, avatar, history, header_name, name, personality, appearance, lorebook, form_vis, popup_vis, chat_vis)
             return (None, gr.update(visible = False), *loaded)
 
@@ -1015,7 +1033,9 @@ with gr.Blocks(title = "Character Studio") as demo:
             )
                 updated_char["summarized_through"] = keep_verbatim
 
-        # Save the updated character
+        # Save the updated character (both in memory and to db)
+        if updated_char.get("db_id") is not None:
+            db.update_character(updated_char["db_id"], updated_char)
         characters[idx] = updated_char
 
         # THIRD YIELD: pushes the saved state to the UI one more time, guarsanteeing that the UI reflects the fully saved characters_state, not jsut the local display_history
@@ -1034,6 +1054,24 @@ with gr.Blocks(title = "Character Studio") as demo:
         inputs = [msg_input, user_profile_state, characters_state, current_index], 
         outputs = [msg_input, chatbot_ui, characters_state]
     )
+
+
+    def load_persisted_characters():
+        """
+        load_persisted_characters: runs once per broswer tab connect (demo.load) to restore
+        previously saved characters from SQLite into characters.state and the sidebar, so a page
+        refresh or app restart doesn't lose anything.
+        """
+        characters = db.load_all_characters()[-MAX_CHARACTERS:]
+        return (characters, *build_sidebar_updates(characters))
+
+
+    demo.load(
+        fn = load_persisted_characters,
+        inputs = [],
+        outputs = [characters_state, *sidebar_output_components],
+    )
+
 
 if __name__ == "__main__":
     demo.launch(css = CUSTOM_CSS)

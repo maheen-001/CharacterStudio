@@ -1,4 +1,9 @@
 **/__pycache__/
 *.py[cod]
+
 # SQLite database
 *.db
+
+# Local dev scripts
+clear_db.py
+seed_db.py

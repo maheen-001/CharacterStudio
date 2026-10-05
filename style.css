@@ -126,22 +126,47 @@ html, body {
 /* App layout: full-height sidebar + full-height main content, no centered
    max-width wrapper for the overall page. */
 .app-row {
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+    flex-wrap: nowrap !important;
     align-items: stretch !important;
+    gap: 0 !important;
 }
+
 .sidebar {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    min-height: 100vh;
-    padding: 0;
+    height: 100vh;
+    max-height: 100vh;
+    min-height: 0;
+    overflow: hidden !important;      /* the shell doesn't scroll... */
     background: var(--panel);
     border-right: 1px solid var(--panel-border);
 }
+.sidebar-new-btn {
+    flex: 0 0 auto;
+    margin: 1rem 1rem 0.5rem 1rem;
+    width: calc(100% - 2rem);
+    background: var(--accent) !important;
+}
+.sidebar-header {
+    flex: 0 0 auto;
+    background: var(--panel);
+}
+
+.sidebar-list {                        /* ...the list does */
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+.sidebar-list > * { flex-shrink: 0 !important; }   /* rows keep their height and overflow instead of squishing */
+
 .main-content {
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
+    height: 100vh;
+    min-height: 0;
+    overflow-y: auto;                  /* main pane scrolls independently */
 }
 .sidebar-new-btn, .sidebar-new-btn button { margin: 1rem 1rem 0.5rem 1rem; width: calc(100% - 2rem); }
 
