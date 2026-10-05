@@ -21,7 +21,25 @@ app.py: A self-contained Gradio web app that walks a user through a 4-step flow:
 """
 
 # Imports
-import os, random
+import os, shutil
+
+# wipe leftovers from previous runs (Gradio saves PNG of avatar to its temp fodler and never deletes)
+GRADIO_CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".gradio_cache")
+shutil.rmtree(GRADIO_CACHE, ignore_errors = True)
+os.makedirs(GRADIO_CACHE, exist_ok = True)
+os.environ["GRADIO_TEMP_DIR"] = GRADIO_CACHE
+
+def sidebar_thumb(img):
+    """
+    sidebar_thumb: small copy for the 40px sidebar avatars: waaay cheaper to encode and send than the 512px original.
+    """
+    if img is None:
+        return None
+    t = img.copy()
+    t.thumbnail((96, 96))
+    return t
+
+import random, time
 import gradio as gr
 from PIL import Image, ImageDraw, ImageFont
 from image_gen import AvatarGenerator
@@ -370,9 +388,9 @@ with gr.Blocks(title = "Character Studio") as demo:
             if i < n:
                 # Newest characters first
                 c = characters[n - 1 - i]
-                updates += [gr.update(visible = True), gr.update(value = c["avatar"]), gr.update(value = c["name"])]
+                updates += [gr.update(visible = True), gr.update(value = sidebar_thumb(c["avatar"])), gr.update(value = c["name"], interactive = True)]
             else:
-                updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "")]
+                updates += [gr.update(visible = False), gr.update(value = None), gr.update(value = "", interactive = True)]
         return updates
 
 
@@ -382,6 +400,18 @@ with gr.Blocks(title = "Character Studio") as demo:
             -> leaves everything as is, basically
         """
         return [gr.update() for _ in range(MAX_CHARACTERS * 3)]
+
+
+    def sidebar_lock_updates(locked):
+        """
+        sidebar_lock_updates: leaves rows and avatars alone, and onlt toggles the interactivity. Prevents
+        user from navigating away while a message is being streamed.
+        """
+        updates = []
+
+        for _ in range(MAX_CHARACTERS):
+            updates += [gr.update(), gr.update(), gr.update(interactive = not locked)]
+        return updates
 
 
     def load_character_by_index(idx, characters):
@@ -574,8 +604,9 @@ with gr.Blocks(title = "Character Studio") as demo:
             if evicted.get("db_id") is not None:
                 db.delete_character(evicted["db_id"])
 
-        # Add new character
+        # Add new character (with timestamp)
         new_char = dict(new_char)
+        new_char["last_active"] = time.time()
         new_char["db_id"] = db.insert_character(new_char)
 
         characters.append(new_char)
@@ -993,7 +1024,7 @@ with gr.Blocks(title = "Character Studio") as demo:
 
         # No character selected (idx = None) or index is out of range, clear the input box, leave chat as-is, and exit early
         if idx is None or idx >= len(characters):
-            yield "", [], characters
+            yield "", [], characters, gr.update(), *no_op_sidebar_updates(), gr.update()
             return
 
         # Get the full dict of active character and their history
@@ -1008,7 +1039,7 @@ with gr.Blocks(title = "Character Studio") as demo:
         ]
 
         # FIRST YIELD: pushes the user's message (and the empty assistant bubble) to the UI; disables input
-        yield gr.update(value = "", interactive = False), display_history, characters
+        yield gr.update(value = "", interactive = False), display_history, characters, gr.update(), *sidebar_lock_updates(True), gr.update(interactive = False)
 
         # bot.respond is the generator from chatbot.py; each yield from it hands back the reply accumulated so far
         for partial_reply in bot.respond(
@@ -1018,11 +1049,12 @@ with gr.Blocks(title = "Character Studio") as demo:
             # Overwrite the last item in display_history (the empty or partial assistant bubble) with the latest text
             display_history[-1]["content"] = partial_reply
             # SECOND YIELD: re-render the chat window, acrtually update with new text
-            yield gr.update(), display_history, characters
+            yield gr.update(), display_history, characters, gr.update(), *no_op_sidebar_updates(), gr.update()
 
         # Ollama message completed, update character's record to preserve history
         updated_char = dict(char)
         updated_char["history"] = display_history
+        updated_char["last_active"] = time.time()
 
         # Implement simple memory: once convo grows past the varbatim window, fold whatever just aged out of it into the running memory_summary so tha future
         # turns stay aware of it without needing to resend the entire history each time
@@ -1043,23 +1075,27 @@ with gr.Blocks(title = "Character Studio") as demo:
         # Save the updated character (both in memory and to db)
         if updated_char.get("db_id") is not None:
             db.update_character(updated_char["db_id"], updated_char)
-        characters[idx] = updated_char
+        
+        # Move this character (most recently chatted) to the top by popping and appending
+        characters.pop(idx)
+        characters.append(updated_char)
+        new_idx = len(characters) - 1
 
         # THIRD YIELD: pushes the saved state to the UI one more time, guarsanteeing that the UI reflects the fully saved characters_state, not jsut the local display_history
         #    -> Also re-enable input
-        yield gr.update(interactive = True), display_history, characters
+        yield gr.update(interactive = True), display_history, characters, new_idx, *build_sidebar_updates(characters), gr.update(interactive = True)
 
     msg_input.submit (
         fn = user_chat, 
         inputs = [msg_input, user_profile_state, characters_state, current_index], 
-        outputs = [msg_input, chatbot_ui, characters_state]
+        outputs = [msg_input, chatbot_ui, characters_state, current_index, *sidebar_output_components, new_char_btn]
     )
 
     # Same callback wired to the send utton so it does the same thing as pressinf enter
     send_btn.click (
         fn = user_chat, 
         inputs = [msg_input, user_profile_state, characters_state, current_index], 
-        outputs = [msg_input, chatbot_ui, characters_state]
+        outputs = [msg_input, chatbot_ui, characters_state, current_index, *sidebar_output_components, new_char_btn]
     )
 
 

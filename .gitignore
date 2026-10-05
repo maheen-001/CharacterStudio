@@ -1,5 +1,6 @@
 **/__pycache__/
 *.py[cod]
+.gradio_cache/
 
 # SQLite database
 *.db

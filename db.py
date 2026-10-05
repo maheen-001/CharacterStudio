@@ -9,6 +9,7 @@ a local SQLite database so they survive browser refreshes and app restarts.
 import os
 import sqlite3
 import pickle
+import time
 
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "characters.db")
@@ -39,7 +40,8 @@ def init_db():
             history BLOB,
             profile BLOB,
             memory_summary TEXT,
-            summarized_through INTEGER DEFAULT 0
+            summarized_through INTEGER DEFAULT 0,
+            last_active REAL DEFAULT 0
         )
     """)
 
@@ -63,8 +65,8 @@ def insert_character(character):
     cursor.execute(
         """
         INSERT INTO characters
-        (name, personality, appearance, lorebook, avatar, history, profile, memory_summary, summarized_through)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (name, personality, appearance, lorebook, avatar, history, profile, memory_summary, summarized_through, last_active)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             character["name"],
@@ -76,6 +78,7 @@ def insert_character(character):
             pickle.dumps(character.get("profile", {})),
             character.get("memory_summary", ""),
             character.get("summarized_through", 0),
+            character.get("last_active", time.time()),
         ),
     )
 
@@ -105,7 +108,8 @@ def update_character(db_id, character):
             history = ?,
             profile = ?,
             memory_summary = ?,
-            summarized_through = ?
+            summarized_through = ?,
+            last_active = ?
         WHERE id = ?
         """,
         (
@@ -118,6 +122,7 @@ def update_character(db_id, character):
             pickle.dumps(character.get("profile", {})),
             character.get("memory_summary", ""),
             character.get("summarized_through", 0),
+            character.get("last_active", 0),
             db_id,
         ),
     )
@@ -148,9 +153,10 @@ def load_all_characters():
             history,
             profile,
             memory_summary,
-            summarized_through
+            summarized_through,
+            last_active
         FROM characters
-        ORDER BY id ASC
+        ORDER BY last_active ASC, id ASC
     """)
 
     rows = cursor.fetchall()
@@ -170,6 +176,7 @@ def load_all_characters():
             profile,
             memory_summary,
             summarized_through,
+            last_active,
         ) = row
 
         characters.append({
@@ -183,6 +190,7 @@ def load_all_characters():
             "profile": pickle.loads(profile) if profile else {},
             "memory_summary": memory_summary or "",
             "summarized_through": summarized_through or 0,
+            "last_active": last_active or 0,
         })
 
     return characters
